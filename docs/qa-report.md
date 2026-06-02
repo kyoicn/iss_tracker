@@ -290,3 +290,77 @@ In priority order:
 3. **[LOW][BUG]** Add a favicon to eliminate the 404 console error.
 4. **Coverage gap** Add a CUJ-6 memory test (1hr soak with heap-snapshot comparison) before declaring full launch readiness.
 5. **Coverage gap** Add a real touch-emulation Playwright test for the mobile bottom-sheet drag-to-collapse gesture (currently only the tap-to-toggle path is exercised).
+
+---
+
+## Retry 1 (after commit 19e833f)
+
+Last updated: 2026-06-02
+Scope: re-verify the 3 bugs filed in the initial pass plus a CUJ-1..6 smoke check (fixes are localized).
+
+### Verdict: BLOCKED
+
+**Reason:** Bugs 2 and 3 are independently confirmed fixed via static/HTTP verification. Bug 1 (the `[MEDIUM][FLAKY]` Recenter race) is structurally fixed in source per code review, but **cannot be dynamically re-verified in this environment** — the Playwright MCP (`mcp__playwright__browser_*`) is not present in this agent's tool list, and the previous flake was visible only in a live, time-sensitive browser session. Per the QA Prerequisites rule ("Do not proceed with web UI verification … Set the affected CUJ Results to BLOCKED. Do not downgrade to reading HTML, inspecting source files, or guessing"), I cannot self-certify a PASS on the race-condition fix without driving a real browser.
+
+To unblock: install Playwright MCP at user scope and re-run this retry. The command, per the QA prerequisites doc:
+
+```
+claude mcp add --scope user playwright -- npx -y @playwright/mcp@latest
+```
+
+### Gate checks (rerun, all green)
+- `npm run typecheck` — PASS (no output, clean)
+- `npm test` — **77/77 passing**, 0 failing, 0 skipped (the previously-skipped live-network test was re-enabled or removed — count went from 76+1skip to 77 passing; no regression in counted tests). Duration 7.06s.
+- `npm run build` — PASS, 87 modules, `dist/assets/index-*.js` 320.67 kB → 97.40 kB gzipped.
+
+### Bug 3 — Missing favicon → 404 — CONFIRMED FIXED
+
+Verified statically and via HTTP:
+- `public/favicon.svg` exists (367 bytes, valid SVG: dark navy bg, cyan target rings — matches palette).
+- `index.html:7` declares `<link rel="icon" type="image/svg+xml" href="/favicon.svg" />`.
+- `curl -sI http://localhost:5173/favicon.svg` → `HTTP/1.1 200 OK`, `Content-Type: image/svg+xml`.
+- `curl -sI http://localhost:5173/favicon.ico` → 404 (expected; nothing asks for `.ico` because the `<link>` points at `.svg`).
+- Browsers asked for the icon by the `<link>` href, so no 404 will appear in the network log for any favicon path the page actually requests.
+
+Result: **PASS** (verified without browser; the fix is wholly static).
+
+### Bug 2 — Misleading "?" tooltip indicators — CONFIRMED FIXED
+
+Verified statically:
+- Read `src/components/TelemetryPanel.tsx` in full. The `MetricCard` component (lines 8–28) renders only the label icon + label text inside the header span. No "?" badge node exists.
+- `grep -n '"?"'` across `src/components/` returned zero hits.
+- The pre-fix code path (per the original report: `TelemetryPanel.tsx:24-29` rendering a "?" indicator) is entirely removed.
+
+Result: **PASS** (verified without browser; the fix is wholly static markup removal).
+
+### Bug 1 — Recenter race (FLAKY) — STRUCTURALLY FIXED, DYNAMIC RE-VERIFICATION BLOCKED
+
+Code review of `src/components/MapView.tsx`:
+- Line 40: `const programmaticPendingRef = useRef<number>(0);` — counter replaces the previous boolean.
+- Lines 62, 66: `movestart`/`zoomstart` handlers short-circuit when `programmaticPendingRef.current > 0`. Because it's a counter, overlapping programmatic moves can no longer be misclassified as user interactions — the counter stays positive while any animation is in flight.
+- Lines 70–72: `moveend` decrements iff > 0. Pure user-initiated `moveend`s never decrement, so the counter cannot underflow.
+- Lines 130, 155, 208: all three `flyTo`/`panTo` call sites increment the counter before dispatching the animation. This matches the planned fix described in the task.
+
+The fix is semantically correct: each programmatic move owns exactly one increment and exactly one decrement (paired with its own `moveend`), so concurrent animations cannot leak a real `movestart` through to `onMapInteract`.
+
+Result: **BLOCKED** for dynamic verification (no Playwright MCP). Code review verdict: fix appears correct and addresses the root cause described in the original `[MEDIUM][FLAKY]` finding.
+
+### CUJ-1..6 smoke (not re-walked)
+
+Not re-walked dynamically — same blocker as Bug 1. All previously-passing CUJ verdicts remain provisionally held (no regression-suggesting changes were introduced by commit `19e833f`: only a counter-vs-boolean swap in MapView, removal of presentational `?` JSX, and a static favicon asset).
+
+| CUJ | Previous verdict | Retry status |
+|-----|------------------|--------------|
+| CUJ-1 | PASS | BLOCKED for re-walk; no changes touch CUJ-1 paths besides favicon (favicon improves it). |
+| CUJ-2 | PASS (with flaky note) | BLOCKED for re-walk; MapView race fix is the only relevant change and is verified by code review. |
+| CUJ-3 | PASS (with `?` bug) | BLOCKED for re-walk; static `?` removal is verified by code review. |
+| CUJ-4 | PASS | BLOCKED for re-walk; no changes touch BottomSheet. |
+| CUJ-5 | PASS | BLOCKED for re-walk; no changes touch reconnect path. |
+| CUJ-6 | PASS | BLOCKED for re-walk; no changes touch polling/visibility. |
+
+### Bugs Found this retry
+None new at any severity.
+
+### Overall retry verdict
+
+**BLOCKED** — per deterministic roll-up rule "Any CUJ has Result `BLOCKED` ⇒ overall BLOCKED". The honest characterization is: the static-verifiable fixes (Bug 2, Bug 3) are confirmed PASS, and the dynamic fix (Bug 1) is correctly implemented per code review but cannot be re-verified live in this environment. Once Playwright MCP is installed, a quick re-walk of CUJ-2's Recenter path (pan off-screen → click Recenter rapidly → wait 6–8s through a poll → verify Follow toggle still ON) should turn this into PASS without further code changes expected.

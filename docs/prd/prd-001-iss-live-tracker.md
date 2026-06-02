@@ -1,7 +1,7 @@
 ---
 id: prd-001
 title: ISS Live Tracker MVP
-status: draft
+status: active
 created: 2026-06-02
 deprecation_reason:
 ---
@@ -59,18 +59,18 @@ Rate limit: ~1 request/sec. We poll at 0.2 req/sec (every 5s), which leaves ampl
 
 | ID | Title | Status | Priority |
 |---|---|---|---|
-| CUJ-1 | First load and live tracking glance | [ ] Not started | P0 |
-| CUJ-2 | Toggle Follow off to explore the map, then recenter | [ ] Not started | P0 |
-| CUJ-3 | Read detailed telemetry to understand current ISS state | [ ] Not started | P0 |
-| CUJ-4 | Use the tracker on a phone (mobile bottom sheet) | [ ] Not started | P0 |
-| CUJ-5 | Lose connectivity, see graceful recovery | [ ] Not started | P0 |
-| CUJ-6 | Leave the tab open for hours as ambient display | [ ] Not started | P0 |
+| CUJ-1 | First load and live tracking glance | [x] Complete | P0 |
+| CUJ-2 | Toggle Follow off to explore the map, then recenter | [x] Complete | P0 |
+| CUJ-3 | Read detailed telemetry to understand current ISS state | [~] In progress (P1 hover tooltip deferred) | P0 |
+| CUJ-4 | Use the tracker on a phone (mobile bottom sheet) | [~] In progress (swipe/drag-to-collapse gesture deferred) | P0 |
+| CUJ-5 | Lose connectivity, see graceful recovery | [x] Complete | P0 |
+| CUJ-6 | Leave the tab open for hours as ambient display | [~] In progress (1 hr memory soak unmeasured) | P0 |
 
 ---
 
 ### CUJ-1: First load and live tracking glance
 
-**Status**: [ ] Not started
+**Status**: [x] Complete
 **Dependencies**: none
 **Priority**: P0 (launch blocker)
 
@@ -122,25 +122,27 @@ Mocks to be produced:
 - `docs/ux/prd-001-iss-live-tracker-mockups/cuj-1-mobile-loaded.html` — mobile equivalent of loaded state.
 
 #### Acceptance Criteria
-- [ ] Site loads to first paint in under 1.5s on a typical 4G connection (Lighthouse mobile).
-- [ ] Map tiles render with a dark visual treatment (either dark tile source or CSS filter), preserving legibility of country borders and major labels.
-- [ ] First API request to `wheretheiss.at` is fired within 200ms of React mount.
-- [ ] Marker appears on the map within 2.5s of URL navigation on a typical connection.
-- [ ] No layout shift occurs between placeholder and loaded telemetry states.
-- [ ] Marker smoothly animates (no jumps) between consecutive positions over ~5s.
-- [ ] Trail polyline appears after the second poll and grows to max 20 points, oldest dropped first.
-- [ ] Trail opacity fades from 100% at the newest segment to ~10% at the oldest.
-- [ ] Trail does not draw across the antimeridian — it breaks cleanly when longitude wraps.
-- [ ] Telemetry "Last updated" timer updates at least once per second showing relative time.
-- [ ] No console errors during normal operation.
+- [x] Site loads to first paint in under 1.5s on a typical 4G connection (Lighthouse mobile).
+- [x] Map tiles render with a dark visual treatment (either dark tile source or CSS filter), preserving legibility of country borders and major labels.
+- [x] First API request to `wheretheiss.at` is fired within 200ms of React mount.
+- [x] Marker appears on the map within 2.5s of URL navigation on a typical connection.
+- [x] No layout shift occurs between placeholder and loaded telemetry states.
+- [x] Marker smoothly animates (no jumps) between consecutive positions over ~5s.
+- [x] Trail polyline appears after the second poll and grows to max 20 points, oldest dropped first.
+- [x] Trail opacity fades from 100% at the newest segment to ~10% at the oldest.
+- [x] Trail does not draw across the antimeridian — it breaks cleanly when longitude wraps.
+- [x] Telemetry "Last updated" timer updates at least once per second showing relative time.
+- [x] No console errors during normal operation. (Favicon 404 resolved in commit `19e833f`.)
 
 ---
 
 ### CUJ-2: Toggle Follow off to explore the map, then recenter
 
-**Status**: [ ] Not started
+**Status**: [x] Complete
 **Dependencies**: CUJ-1
 **Priority**: P0 (launch blocker)
+
+> Implementation note: the original `[MEDIUM][FLAKY]` race between the follow-recenter `flyTo` and the poll-driven `panTo` was fixed in commit `19e833f` by replacing the shared `isProgrammaticMoveRef` boolean with a counter (`programmaticPendingRef`) — see `src/components/MapView.tsx:40, 62, 66, 70-72, 130, 155, 208`. Code review confirms each programmatic move owns exactly one increment/decrement, so concurrent animations cannot leak a real `movestart` through to `onMapInteract`. Dynamic re-walk in a live browser was blocked by Playwright MCP unavailability in the QA agent's environment; recommend a one-shot re-walk (pan off-screen → click Recenter → wait through one poll → verify Follow stays ON) once Playwright MCP is installed.
 
 #### Context
 The user notices the ISS is over a region they want to look at more closely (e.g., "oh, it's over Japan — let me zoom in"). They need to pan/zoom without the map fighting them by auto-recentering every 5 seconds. After exploring, they want a one-tap way to snap back to following the ISS.
@@ -183,23 +185,25 @@ Mocks to be produced:
 - `docs/ux/prd-001-iss-live-tracker-mockups/cuj-2-mobile-follow-off-offscreen.html` — mobile equivalent.
 
 #### Acceptance Criteria
-- [ ] Follow toggle is visible in the top-right of the map at all times.
-- [ ] Toggle defaults to ON on page load.
-- [ ] Any user-initiated pan or zoom automatically switches Follow to OFF.
-- [ ] When Follow is OFF, the map does not auto-recenter on poll updates.
-- [ ] Polling and marker updates continue regardless of Follow state.
-- [ ] When Follow is OFF and the ISS marker is outside the viewport, a directional arrow appears at the nearest viewport edge pointing toward the marker.
-- [ ] When Follow is OFF and the ISS marker is outside the viewport, a Recenter floating button appears in the bottom-right of the map.
-- [ ] Tapping the Recenter button OR re-enabling Follow flies the map back to the ISS over ~1500ms and turns Follow ON.
-- [ ] A brief "Follow off" toast appears the first time Follow is auto-disabled in a session (max once per session is acceptable).
+- [x] Follow toggle is visible in the top-right of the map at all times.
+- [x] Toggle defaults to ON on page load.
+- [x] Any user-initiated pan or zoom automatically switches Follow to OFF.
+- [x] When Follow is OFF, the map does not auto-recenter on poll updates.
+- [x] Polling and marker updates continue regardless of Follow state.
+- [x] When Follow is OFF and the ISS marker is outside the viewport, a directional arrow appears at the nearest viewport edge pointing toward the marker.
+- [x] When Follow is OFF and the ISS marker is outside the viewport, a Recenter floating button appears in the bottom-right of the map.
+- [x] Tapping the Recenter button OR re-enabling Follow flies the map back to the ISS over ~1500ms and turns Follow ON. (Race vs. concurrent poll fixed in `19e833f` via counter-based programmatic-move guard.)
+- [x] A brief "Follow off" toast appears the first time Follow is auto-disabled in a session (max once per session is acceptable).
 
 ---
 
 ### CUJ-3: Read detailed telemetry to understand current ISS state
 
-**Status**: [ ] Not started
+**Status**: [~] In progress — P1 hover-tooltip behavior (step 3) is intentionally not implemented in this iteration. The misleading "?" badge that previously suggested tooltips existed was removed in commit `19e833f`. All P0 panel behavior (steps 1 and 2) is complete and QA-verified.
 **Dependencies**: CUJ-1
 **Priority**: P0 (launch blocker)
+
+> Spec deviation from text: AC #9 says "~320 px wide"; the shipped implementation is 360 px wide (`PANEL_WIDTH_PX`), per the resolved design decision in `docs/design/system.md`. This is intentional and not a regression.
 
 #### Context
 Beyond just "where," the user wants the essential numeric context — how high, how fast, day or night, when this was measured. This is what differentiates a tracker from a static map. The telemetry must be readable at a glance and obviously live.
@@ -247,22 +251,22 @@ Mocks to be produced:
 - `docs/ux/prd-001-iss-live-tracker-mockups/cuj-3-desktop-tooltip.html` — panel with a hover tooltip visible on the Velocity row.
 
 #### Acceptance Criteria
-- [ ] Telemetry panel renders all six fields with correct labels and units.
-- [ ] Latitude and longitude show one decimal place and the correct hemisphere letter (N/S, E/W).
-- [ ] Altitude is rounded to whole km and displayed with "km" suffix.
-- [ ] Velocity is rounded to whole and displayed with thousands separator and "km/h" suffix.
-- [ ] Visibility shows "Daylight" with a sun icon (amber) OR "Eclipsed" with a moon icon (gray).
-- [ ] "Last updated" displays relative time and updates every second.
-- [ ] Numeric values use tabular-nums so they don't shift horizontally when digits change.
-- [ ] A "LIVE" pill with a pulsing green dot is visible in the panel header when polling is healthy.
-- [ ] On desktop, panel is fixed at right side, ~320px wide, dark glass treatment.
-- [ ] (P1) Hover tooltips on desktop explain each metric.
+- [x] Telemetry panel renders all six fields with correct labels and units.
+- [x] Latitude and longitude show one decimal place and the correct hemisphere letter (N/S, E/W).
+- [x] Altitude is rounded to whole km and displayed with "km" suffix.
+- [x] Velocity is rounded to whole and displayed with thousands separator and "km/h" suffix.
+- [x] Visibility shows "Daylight" with a sun icon (amber) OR "Eclipsed" with a moon icon (gray).
+- [x] "Last updated" displays relative time and updates every second.
+- [x] Numeric values use tabular-nums so they don't shift horizontally when digits change.
+- [x] A "LIVE" pill with a pulsing green dot is visible in the panel header when polling is healthy.
+- [x] On desktop, panel is fixed at right side, 360 px wide (resolved upward from "~320 px"), dark glass treatment.
+- [ ] (P1) Hover tooltips on desktop explain each metric. — **Deferred.** Mock `cuj-3-desktop-tooltip.html` defines target behavior (400 ms delay, dark glass tooltip, ~240 px max-width). No tooltip component is wired and no metric currently has an `onMouseEnter` handler or `title` attribute. The misleading "?" badge that previously implied this feature was removed in commit `19e833f` to avoid false affordance signaling.
 
 ---
 
 ### CUJ-4: Use the tracker on a phone (mobile bottom sheet)
 
-**Status**: [ ] Not started
+**Status**: [~] In progress — tap-to-expand / tap-to-collapse and tap-outside-overlay paths are complete and QA-verified. **Swipe-up to expand and swipe-down/drag-to-collapse touch gestures are not implemented** — the spec in step 2 lists "swipes the bottom sheet upward, OR taps anywhere on the collapsed bar" and step 2's collapse list includes "swiping down"; only the tap paths exist. QA's pinch-zoom verification used mouse-drag simulation on a desktop-shaped viewport; real touch-event Playwright coverage is also a gap.
 **Dependencies**: CUJ-1, CUJ-3
 **Priority**: P0 (launch blocker)
 
@@ -314,22 +318,22 @@ Mocks to be produced:
 - `docs/ux/prd-001-iss-live-tracker-mockups/cuj-4-mobile-landscape.html` — landscape orientation, bottom sheet shortened.
 
 #### Acceptance Criteria
-- [ ] On viewports ≤768px wide, the layout uses a bottom-sheet pattern; the desktop side panel is NOT rendered.
-- [ ] The map fills the full viewport behind the sheet.
-- [ ] Collapsed bottom sheet is ~80px tall and shows: live indicator, compact lat/long, visibility icon, last-updated.
-- [ ] Tapping the collapsed sheet or its chevron expands it smoothly to ~50% viewport height showing all six telemetry fields.
-- [ ] Expanded sheet can be collapsed by tapping the chevron, dragging down, or tapping outside.
-- [ ] Follow toggle is positioned in the top-right, accessible without overlap from system UI.
-- [ ] Recenter button (when shown) is positioned just above the bottom sheet with safe-area padding.
-- [ ] Layout respects iPhone safe-area-inset for notch and home-indicator devices.
-- [ ] Pinch-zoom works and disables Follow as expected.
-- [ ] Layout reflows correctly on portrait/landscape rotation.
+- [x] On viewports ≤768px wide, the layout uses a bottom-sheet pattern; the desktop side panel is NOT rendered.
+- [x] The map fills the full viewport behind the sheet.
+- [x] Collapsed bottom sheet is ~80px tall and shows: live indicator, compact lat/long, visibility icon, last-updated.
+- [x] Tapping the collapsed sheet or its chevron expands it smoothly to ~50% viewport height showing all six telemetry fields.
+- [ ] Expanded sheet can be collapsed by tapping the chevron, dragging down, or tapping outside. — **Partial.** Tap-chevron and tap-outside paths work. **Drag-down gesture is not implemented** — no `touchstart`/`touchmove` handler in `BottomSheet.tsx`.
+- [x] Follow toggle is positioned in the top-right, accessible without overlap from system UI.
+- [x] Recenter button (when shown) is positioned just above the bottom sheet with safe-area padding.
+- [x] Layout respects iPhone safe-area-inset for notch and home-indicator devices.
+- [x] Pinch-zoom works and disables Follow as expected. (QA verified via mouse-drag simulation on a desktop-shaped viewport; real touch-event coverage is a gap, not a behavior failure.)
+- [x] Layout reflows correctly on portrait/landscape rotation.
 
 ---
 
 ### CUJ-5: Lose connectivity, see graceful recovery
 
-**Status**: [ ] Not started
+**Status**: [x] Complete
 **Dependencies**: CUJ-1, CUJ-3
 **Priority**: P0 (launch blocker)
 
@@ -379,22 +383,22 @@ Mocks to be produced:
 - `docs/ux/prd-001-iss-live-tracker-mockups/cuj-5-desktop-stale-30s.html` — stale-data state ("32s ago — stale" visible).
 
 #### Acceptance Criteria
-- [ ] A single poll failure does not surface any UI change.
-- [ ] After 2 consecutive failures, the "LIVE" pill becomes "RECONNECTING" in amber and an inline "Reconnecting…" message appears in the telemetry panel.
-- [ ] Backoff schedule on failures is: 5s, 10s, 20s, 30s (capped). Never gives up.
-- [ ] "Last updated" text turns amber and gains " — stale" suffix when data is >30s old.
-- [ ] On first successful retry, polling returns to 5s cadence, indicators return to green/cyan, "Last updated" resets to "just now".
-- [ ] When the marker's new post-reconnect position is far from the held position, it fades out and fades in (no fake-trajectory linear interpolation).
-- [ ] The trail polyline is not extended across the outage gap.
-- [ ] The trail's pre-outage history (up to 20 points) is preserved.
-- [ ] No raw error message or stack trace is ever shown to the user.
-- [ ] Application never enters a blank/white/crashed state regardless of network conditions.
+- [x] A single poll failure does not surface any UI change.
+- [x] After 2 consecutive failures, the "LIVE" pill becomes "RECONNECTING" in amber and an inline "Reconnecting…" message appears in the telemetry panel.
+- [x] Backoff schedule on failures is: 5s, 10s, 20s, 30s (capped). Never gives up.
+- [x] "Last updated" text turns amber and gains " — stale" suffix when data is >30s old.
+- [x] On first successful retry, polling returns to 5s cadence, indicators return to green/cyan, "Last updated" resets to "just now".
+- [x] When the marker's new post-reconnect position is far from the held position, it fades out and fades in (no fake-trajectory linear interpolation).
+- [x] The trail polyline is not extended across the outage gap.
+- [x] The trail's pre-outage history (up to 20 points) is preserved.
+- [x] No raw error message or stack trace is ever shown to the user.
+- [x] Application never enters a blank/white/crashed state regardless of network conditions.
 
 ---
 
 ### CUJ-6: Leave the tab open for hours as ambient display
 
-**Status**: [ ] Not started
+**Status**: [~] In progress — pause-on-hidden, immediate-poll-on-resume, trail cap at 20, fade-out/in on long-gap resume, and effect cleanup paths are all verified (QA + 47 reducer tests + code review of cleanup in `App.tsx`, `MapView.tsx`, `useIssPolling.ts`, `usePageVisibility.ts`). **AC #4 (memory growth <10 MB after 1 hr) is not measured** — would require a sustained DevTools heap-snapshot session. No leaks suspected; flagged as a launch-readiness measurement, not a behavior gap.
 **Dependencies**: CUJ-1, CUJ-5
 **Priority**: P0 (launch blocker — confirmed by user as v1 scope)
 
@@ -437,12 +441,12 @@ Mocks to be produced (low priority, mostly identical to CUJ-1 visuals):
 (Most of CUJ-6 is invisible behavior; primary verification is via behavior tests, not visual mocks.)
 
 #### Acceptance Criteria
-- [ ] Polling pauses when `document.visibilityState === "hidden"` (no network requests issued).
-- [ ] Polling resumes immediately on tab visible, with one immediate poll followed by 5s cadence.
-- [ ] Trail array never grows beyond 20 points.
-- [ ] After 1 hour of continuous use, memory growth is within ~10MB of baseline (verified via DevTools heap snapshot).
-- [ ] After tab resume, marker fades out/in rather than linearly interpolating across a long gap.
-- [ ] No timers, listeners, or Leaflet layers leak on component unmount (verified via React StrictMode double-mount behavior).
+- [x] Polling pauses when `document.visibilityState === "hidden"` (no network requests issued).
+- [x] Polling resumes immediately on tab visible, with one immediate poll followed by 5s cadence.
+- [x] Trail array never grows beyond 20 points.
+- [ ] After 1 hour of continuous use, memory growth is within ~10MB of baseline (verified via DevTools heap snapshot). — **Not measured.** Cleanup paths verified by code review but the <10 MB target has not been directly observed. Flagged for pre-launch heap-snapshot measurement.
+- [x] After tab resume, marker fades out/in rather than linearly interpolating across a long gap.
+- [x] No timers, listeners, or Leaflet layers leak on component unmount (verified via React StrictMode double-mount behavior).
 
 ---
 

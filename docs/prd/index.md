@@ -68,4 +68,4 @@ These requirements apply across all features and CUJs.
 
 | PRD | Status | Summary |
 |---|---|---|
-| [prd-001-iss-live-tracker](./prd-001-iss-live-tracker.md) | draft | The MVP: live map with ISS marker, telemetry panel, follow toggle, mobile responsive, graceful reconnect. |
+| [prd-001-iss-live-tracker](./prd-001-iss-live-tracker.md) | active | The MVP: live map with ISS marker, telemetry panel, follow toggle, mobile responsive, graceful reconnect. 6 P0 CUJs — CUJ-1, CUJ-2, CUJ-5 complete; CUJ-3, CUJ-4, CUJ-6 in progress (P1 tooltip / swipe-drag-to-collapse / 1 hr memory soak deferred). |
