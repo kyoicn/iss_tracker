@@ -36,8 +36,11 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
   const labelRef = useRef<L.Marker | null>(null);
   const trailLayerRef = useRef<L.LayerGroup | null>(null);
   const rafRef = useRef<number | null>(null);
+  const jumpTimeoutRef = useRef<number | null>(null);
   const isProgrammaticMoveRef = useRef<boolean>(false);
   const lastSampleAtRef = useRef<number | null>(null);
+  const followRef = useRef<boolean>(state.follow);
+  followRef.current = state.follow;
 
   useEffect(() => {
     onMapReady(map);
@@ -81,6 +84,7 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
       map.off('moveend', handleMoveEnd);
       map.off('zoomend', handleMoveEnd);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      if (jumpTimeoutRef.current !== null) window.clearTimeout(jumpTimeoutRef.current);
       marker.remove();
       labelRef.current?.remove();
       trailLayer.remove();
@@ -101,40 +105,40 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
+    if (jumpTimeoutRef.current !== null) {
+      window.clearTimeout(jumpTimeoutRef.current);
+      jumpTimeoutRef.current = null;
+    }
 
-    const target: [number, number] = [state.current.lat, state.current.lon];
+    const sample = state.current;
+    const target: [number, number] = [sample.lat, sample.lon];
     const prev = state.previous;
-    const gapMs = prev ? state.current.receivedAtMs - prev.receivedAtMs : Infinity;
+    const gapMs = prev ? sample.receivedAtMs - prev.receivedAtMs : Infinity;
     const shouldJump = !prev || gapMs > TRAIL_GAP_THRESHOLD_MS;
+    const isFirstFix = lastSampleAtRef.current === null;
 
     if (shouldJump) {
       m.setOpacity(0);
-      window.setTimeout(() => {
+      jumpTimeoutRef.current = window.setTimeout(() => {
+        jumpTimeoutRef.current = null;
         m.setLatLng(target);
         m.setOpacity(1);
-        if (state.follow) {
+        if (followRef.current) {
           isProgrammaticMoveRef.current = true;
-          map.flyTo(
-            target,
-            ISS_LOCK_ZOOM,
-            {
-              duration: lastSampleAtRef.current === null
-                ? FLY_TO_DURATION_INITIAL_S
-                : FLY_TO_DURATION_RECENTER_S,
-            },
-          );
+          map.flyTo(target, ISS_LOCK_ZOOM, {
+            duration: isFirstFix ? FLY_TO_DURATION_INITIAL_S : FLY_TO_DURATION_RECENTER_S,
+          });
         } else {
-          const onScreen = map.getBounds().contains(target);
-          onMarkerVisibilityChange(onScreen);
+          onMarkerVisibilityChange(map.getBounds().contains(target));
         }
-        lastSampleAtRef.current = state.current!.receivedAtMs;
+        lastSampleAtRef.current = sample.receivedAtMs;
       }, 200);
     } else {
       m.setOpacity(1);
       const startMs = performance.now();
       const duration = Math.min(gapMs, 5000);
       const a = { lat: prev!.lat, lon: prev!.lon };
-      const b = { lat: state.current.lat, lon: state.current.lon };
+      const b = { lat: sample.lat, lon: sample.lon };
 
       const tween = () => {
         const t = Math.min(1, (performance.now() - startMs) / duration);
@@ -144,19 +148,18 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
           rafRef.current = requestAnimationFrame(tween);
         } else {
           rafRef.current = null;
-          if (state.follow) {
+          if (followRef.current) {
             isProgrammaticMoveRef.current = true;
             map.panTo(target, { animate: true, duration: 0.4 });
           } else {
-            const onScreen = map.getBounds().contains(target);
-            onMarkerVisibilityChange(onScreen);
+            onMarkerVisibilityChange(map.getBounds().contains(target));
           }
-          lastSampleAtRef.current = state.current!.receivedAtMs;
+          lastSampleAtRef.current = sample.receivedAtMs;
         }
       };
       rafRef.current = requestAnimationFrame(tween);
     }
-  }, [state.current?.receivedAtMs, state.follow, map, onMarkerVisibilityChange, state.current, state.previous]);
+  }, [state.current?.receivedAtMs, map, onMarkerVisibilityChange, state.current, state.previous]);
 
   useEffect(() => {
     const layer = trailLayerRef.current;
@@ -196,12 +199,17 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
   }, [state.trail]);
 
   useEffect(() => {
-    if (!state.follow || !state.current) return;
+    if (!state.follow) return;
+    const sample = state.current;
+    if (!sample) return;
     isProgrammaticMoveRef.current = true;
-    map.flyTo([state.current.lat, state.current.lon], ISS_LOCK_ZOOM, {
+    map.flyTo([sample.lat, sample.lon], ISS_LOCK_ZOOM, {
       duration: FLY_TO_DURATION_RECENTER_S,
     });
-  }, [state.follow, map, state.current]);
+    // Only fire on follow flipping ON — sample-driven recentering is owned by the
+    // marker-placement effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.follow]);
 
   return null;
 }
