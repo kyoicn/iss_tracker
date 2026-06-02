@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ISS — Zarya · live + trail (cuj-1-desktop-with-trail)</title>
+  <meta name="viewport" content="width=1200" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #0d1117; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #e6edf3;
+      min-width: 1200px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+    .frame {
+      position: relative;
+      width: 1200px; height: 820px;
+      margin: 0 auto; overflow: hidden;
+      background: #0d1117;
+    }
+
+    .map { position: absolute; top: 0; bottom: 0; left: 0; right: 360px; background: #0a0f17; overflow: hidden; }
+    .map-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .vignette { position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 70%, rgba(10,15,23,.55) 100%);
+    }
+    .stars { position: absolute; inset: 0; pointer-events: none; opacity: .35;
+      background-image:
+        radial-gradient(1px 1px at 18% 28%, rgba(255,255,255,.6) 50%, transparent 51%),
+        radial-gradient(1px 1px at 62% 18%, rgba(255,255,255,.5) 50%, transparent 51%),
+        radial-gradient(1px 1px at 88% 42%, rgba(255,255,255,.4) 50%, transparent 51%),
+        radial-gradient(1px 1px at 35% 72%, rgba(255,255,255,.4) 50%, transparent 51%),
+        radial-gradient(1px 1px at 78% 78%, rgba(255,255,255,.35) 50%, transparent 51%);
+    }
+
+    .glass { background: rgba(22,27,34,.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(240,246,252,.08); }
+    .glass-soft { background: rgba(22,27,34,.62); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(240,246,252,.08); }
+
+    .title-chip { position: absolute; top: 16px; left: 16px; display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: 10px; }
+    .title-chip .sat-icon { color: #7dd3fc; opacity: .9; }
+    .title-chip .name { font-size: 13px; font-weight: 500; color: #e6edf3; line-height: 1.2; }
+    .title-chip .sub { margin-top: 3px; font-size: 10.5px; color: #8b949e; letter-spacing: 0.14em; text-transform: uppercase; display:flex; align-items:center; gap:6px; }
+    .live-dot-sm { display:inline-block; width:6px; height:6px; border-radius:999px; background:#22c55e; box-shadow: 0 0 6px rgba(34,197,94,.7); }
+
+    .follow { position: absolute; top: 16px; right: 16px; display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border-radius: 999px; width: 132px; }
+    .follow.on { border-color: rgba(125,211,252,.45); }
+    .switch { display:inline-block; width:28px; height:16px; border-radius:999px; background:#30363d; position:relative; flex:0 0 auto; }
+    .switch::after { content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:999px; background:#c9d1d9; }
+    .switch.on { background: #0c3a4a; }
+    .switch.on::after { left: 14px; background: #7dd3fc; box-shadow: 0 0 8px rgba(125,211,252,.7); }
+    .follow .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #c9d1d9; }
+    .follow .state { margin-left: auto; font-size: 9.5px; color: #6e7681; }
+    .follow.on .state { color: #7dd3fc; }
+
+    .map-placeholder { position: absolute; right: 16px; bottom: 12px; padding: 6px 11px; border-radius: 6px; font-size: 10.5px; color: #8b949e; letter-spacing: 0.1em; text-transform: uppercase; pointer-events: none; }
+    .attribution { position: absolute; bottom: 12px; left: 16px; font-size: 11px; color: #6e7681; }
+
+    /* ISS marker positioned by % within the map div, aligned with viewBox center+offset */
+    .iss-marker {
+      position: absolute; left: 28.75%; top: 50%;
+      width: 10px; height: 10px; border-radius: 999px;
+      background: #22d3ee;
+      box-shadow: 0 0 12px 4px rgba(34,211,238,.55), 0 0 28px 10px rgba(34,211,238,.18);
+      transform: translate(-50%, -50%);
+      z-index: 6;
+    }
+    .iss-marker::after {
+      content:""; position:absolute; inset:-14px; border-radius:999px;
+      border: 1px solid rgba(34,211,238,.35);
+      animation: markerHalo 2.2s ease-out infinite;
+    }
+    @keyframes markerHalo {
+      0% { transform: scale(.7); opacity: .9; }
+      80% { transform: scale(1.4); opacity: 0; }
+      100% { opacity: 0; }
+    }
+    .marker-label { position: absolute; left: calc(28.75% + 16px); top: calc(50% - 14px); padding: 4px 8px; border-radius: 6px; font-size: 10px; color: #e6edf3; letter-spacing: 0.10em; text-transform: uppercase; font-weight: 500; z-index: 6; }
+
+    /* -------- Side panel -------- */
+    .panel { position: absolute; top: 0; bottom: 0; right: 0; width: 360px; display: flex; flex-direction: column; background: #11161f; border-left: 1px solid rgba(240,246,252,.06); }
+    .panel-header { padding: 22px 22px 18px; }
+    .panel-topbar { display: flex; align-items: center; justify-content: space-between; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 7px; border-radius: 999px; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500; }
+    .pill-live { background: rgba(34,197,94,.12); color: #86efac; border: 1px solid rgba(34,197,94,.30); }
+    .pill-live .dot { display:inline-block; width:6px; height:6px; border-radius:999px; background:#22c55e; }
+    @keyframes livePulse { 0%,100%{opacity:.65; box-shadow:0 0 4px rgba(34,197,94,.5);} 50%{opacity:1; box-shadow:0 0 10px rgba(34,197,94,.85);} }
+    .pill-live .dot { animation: livePulse 1.5s ease-in-out infinite; }
+    .sys-label { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #6e7681; margin-left: 10px; font-weight: 500; }
+    .signal { display: flex; align-items: flex-end; gap: 2px; }
+    .signal span { display: block; width: 3px; background: #22c55e; border-radius: 1px; opacity: .95; }
+
+    .panel-title { margin: 16px 0 4px; font-size: 22px; font-weight: 600; letter-spacing: -0.015em; color: #f0f6fc; }
+    .panel-sub { font-size: 12.5px; color: #8b949e; line-height: 1.4; }
+
+    .section { padding: 0 22px; }
+    .section + .section { margin-top: 18px; }
+    .section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .section-head .label { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #6e7681; font-weight: 500; }
+    .section-head .rule { flex: 1; height: 1px; background: rgba(139,148,158,.10); }
+
+    .grid-1 { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .card { padding: 13px 15px; border-radius: 10px; background: #1a212e; border: 1px solid rgba(240,246,252,.06); transition: border-color .15s; }
+    .card:hover { border-color: rgba(125,211,252,.20); }
+    .card-head { display: flex; align-items: center; justify-content: space-between; }
+    .card-label { display:flex; align-items:center; gap:8px; color:#8b949e; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500; }
+    .card-label svg { color: #8b949e; opacity: .8; }
+    .help-dot { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border:1px solid rgba(139,148,158,.30); border-radius:999px; color:#8b949e; font-size:9px; line-height:1; }
+    .card-value { margin-top: 6px; display: flex; align-items: baseline; gap: 6px; color: #f0f6fc; font-size: 22px; font-weight: 500; letter-spacing: -0.01em; }
+    .card-value .num { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .unit { font-size: 12px; color: #6e7681; font-weight: 500; }
+
+    .vis-value { display:flex; align-items:center; gap:8px; color:#f0f6fc; font-size:20px; font-weight:500; margin-top:6px; }
+    .sun-icon { color: #f59e0b; filter: drop-shadow(0 0 6px rgba(245,158,11,.45)); }
+
+    .panel-spacer { flex: 1; }
+    .feed-card { margin: 16px 22px 20px; }
+    .feed-sub { margin-top: 10px; display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: #6e7681; }
+    .feed-meta { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #6e7681; font-weight: 500; }
+    .updated-val { margin-top: 6px; font-size: 18px; color: #f0f6fc; font-weight: 500; }
+
+    /* trail summary chip in panel header */
+    .trail-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; background: rgba(34,211,238,.10); border: 1px solid rgba(34,211,238,.22); color: #7dd3fc; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500; margin-left: auto; }
+    .trail-chip .swatch { width: 14px; height: 2px; background: linear-gradient(90deg, rgba(34,211,238,.15), #22d3ee); border-radius: 1px; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <!-- ============ MAP — pacific-centered view with ISS over north-central Pacific + 10-segment trail ============ -->
+    <div class="map">
+      <div class="stars"></div>
+
+      <!-- World map (Pacific-centric crop): viewBox 0..400 of full world map = lon -180..-36 -->
+      <svg class="map-svg" viewBox="0 0 400 390" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="seaGrad3" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#0a0f17"/>
+            <stop offset="100%" stop-color="#0e1421"/>
+          </linearGradient>
+          <pattern id="grid3" width="55.55" height="55.55" patternUnits="userSpaceOnUse">
+            <path d="M 55.55 0 L 0 0 0 55.55" fill="none" stroke="#161c2a" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect x="-200" y="-100" width="1600" height="800" fill="url(#seaGrad3)"/>
+        <rect x="-200" y="-100" width="1600" height="800" fill="url(#grid3)"/>
+        <line x1="-200" y1="250" x2="1400" y2="250" stroke="#1b2436" stroke-width="0.8" opacity=".7"/>
+        <line x1="-200" y1="185" x2="1400" y2="185" stroke="#141a28" stroke-width="0.6" opacity=".6"/>
+        <line x1="-200" y1="315" x2="1400" y2="315" stroke="#141a28" stroke-width="0.6" opacity=".6"/>
+
+        <g fill="#1d2638" stroke="#2f3b54" stroke-width="0.7" stroke-linejoin="round">
+          <!-- North America -->
+          <path d="M55,120 L80,108 L110,95 L150,92 L175,98 L150,118 L160,128 L195,118 L230,112 L268,118 L295,135 L310,158 L305,178 L292,195 L270,205 L255,220 L248,238 L235,245 L218,245 L205,250 L200,265 L210,278 L208,288 L195,283 L182,272 L178,258 L168,250 L155,240 L142,228 L128,218 L115,205 L105,188 L92,170 L82,150 L70,138 Z"/>
+          <!-- Greenland -->
+          <path d="M335,75 L375,72 L395,90 L390,118 L365,135 L335,128 L325,108 Z"/>
+          <!-- Central America -->
+          <path d="M208,288 L222,295 L235,305 L248,315 L255,322 L248,328 L235,322 L222,312 L212,302 Z"/>
+          <!-- South America (only NW portion visible in this crop) -->
+          <path d="M255,322 L278,318 L298,322 L320,335 L335,355 L340,378 L335,402 L325,425 L312,445 L298,460 L285,468 L275,460 L272,440 L278,418 L282,395 L278,372 L270,352 L262,338 Z"/>
+          <!-- Hawaii (tiny dots, indicative) -->
+          <ellipse cx="95"  cy="200" rx="2.2" ry="1.2"/>
+          <ellipse cx="100" cy="203" rx="1.8" ry="1"/>
+        </g>
+
+        <!-- Faint geographic labels -->
+        <g font-family="ui-sans-serif, system-ui" font-size="9" fill="#3b4a66" letter-spacing="2">
+          <text x="120" y="65">ARCTIC OCEAN</text>
+          <text x="60"  y="160">ALASKA</text>
+          <text x="270" y="160">CANADA</text>
+          <text x="285" y="210">USA</text>
+          <text x="270" y="270">MEXICO</text>
+          <text x="125" y="220" fill="#445270">HAWAII</text>
+          <text x="100" y="320">PACIFIC OCEAN</text>
+          <text x="295" y="390">SOUTH AMERICA</text>
+        </g>
+
+        <!-- TRAIL: 10 segments behind ISS marker, fading from full opacity (newest) to ~10% (oldest)
+             marker viewBox coord: (115, 195). Trail extends back to the SW (older points). -->
+        <g stroke="#22d3ee" stroke-width="2.2" stroke-linecap="round" fill="none">
+          <!-- newest segments (closest to marker) -->
+          <line x1="108" y1="197" x2="115" y2="195" opacity="1.00"/>
+          <line x1="99"  y1="199" x2="108" y2="197" opacity="0.85"/>
+          <line x1="89"  y1="202" x2="99"  y2="199" opacity="0.72"/>
+          <line x1="78"  y1="205" x2="89"  y2="202" opacity="0.60"/>
+          <line x1="66"  y1="209" x2="78"  y2="205" opacity="0.50"/>
+          <line x1="53"  y1="214" x2="66"  y2="209" opacity="0.40"/>
+          <line x1="40"  y1="220" x2="53"  y2="214" opacity="0.31"/>
+          <line x1="25"  y1="226" x2="40"  y2="220" opacity="0.23"/>
+          <line x1="10"  y1="233" x2="25"  y2="226" opacity="0.16"/>
+          <line x1="-6"  y1="240" x2="10"  y2="233" opacity="0.10"/>
+        </g>
+        <!-- tiny tick at each historical point, fading with the trail -->
+        <g fill="#22d3ee">
+          <circle cx="108" cy="197" r="1.6" opacity=".9"/>
+          <circle cx="99"  cy="199" r="1.4" opacity=".7"/>
+          <circle cx="89"  cy="202" r="1.3" opacity=".55"/>
+          <circle cx="78"  cy="205" r="1.2" opacity=".42"/>
+          <circle cx="66"  cy="209" r="1.1" opacity=".33"/>
+          <circle cx="53"  cy="214" r="1.0" opacity=".25"/>
+          <circle cx="40"  cy="220" r="1.0" opacity=".19"/>
+          <circle cx="25"  cy="226" r="1.0" opacity=".14"/>
+          <circle cx="10"  cy="233" r="1.0" opacity=".10"/>
+        </g>
+      </svg>
+
+      <div class="vignette"></div>
+
+      <div class="title-chip glass">
+        <svg class="sat-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="6" height="6" rx="1"/>
+          <path d="M9 9 L3 3 M15 9 L21 3 M9 15 L3 21 M15 15 L21 21"/>
+          <circle cx="3" cy="3" r="1.4"/><circle cx="21" cy="3" r="1.4"/>
+          <circle cx="3" cy="21" r="1.4"/><circle cx="21" cy="21" r="1.4"/>
+        </svg>
+        <div>
+          <div class="name">ISS — Zarya</div>
+          <div class="sub mono"><span class="live-dot-sm"></span>Live tracking · pass 1/1</div>
+        </div>
+      </div>
+
+      <div class="follow glass on">
+        <span class="switch on"></span>
+        <span class="label">Follow ISS</span>
+        <span class="state mono">ON</span>
+      </div>
+
+      <!-- ISS marker + label -->
+      <div class="iss-marker"></div>
+      <div class="marker-label glass-soft mono">ISS · 408&thinsp;km</div>
+
+      <div class="map-placeholder glass-soft mono">
+        [ Map placeholder — Leaflet · zoom 3 · trail = last 10 fixes ]
+      </div>
+
+      <div class="attribution">Data: wheretheiss.at · Map: OpenStreetMap</div>
+    </div>
+
+    <!-- ============ SIDE PANEL ============ -->
+    <aside class="panel">
+      <div class="panel-header">
+        <div class="panel-topbar">
+          <div style="display:flex; align-items:center;">
+            <span class="pill pill-live"><span class="dot"></span>Live</span>
+            <span class="sys-label">Mission Live</span>
+          </div>
+          <div class="signal" aria-label="Signal strong">
+            <span style="height:5px"></span><span style="height:8px"></span><span style="height:11px"></span><span style="height:14px"></span>
+          </div>
+        </div>
+        <h1 class="panel-title">ISS&nbsp;—&nbsp;Zarya</h1>
+        <div class="panel-sub" style="display:flex; align-items:center; gap:10px;">
+          <span>Over central Pacific · 408&thinsp;km</span>
+          <span class="trail-chip"><span class="swatch"></span>Trail · 10</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><span class="label">Position</span><span class="rule"></span></div>
+        <div class="grid-1">
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h18"/><path d="M5 8h14M5 16h14" opacity=".5"/></svg>Latitude</span>
+              <span class="help-dot mono">?</span>
+            </div>
+            <div class="card-value"><span class="num">19.8</span><span class="unit mono">° N</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v18"/><path d="M8 5v14M16 5v14" opacity=".5"/></svg>Longitude</span>
+              <span class="help-dot mono">?</span>
+            </div>
+            <div class="card-value"><span class="num">138.6</span><span class="unit mono">° W</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l4 6h-3v12h-2V9H8z"/></svg>Altitude</span>
+              <span class="help-dot mono">?</span>
+            </div>
+            <div class="card-value"><span class="num">408</span><span class="unit mono">km</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><span class="label">Telemetry</span><span class="rule"></span></div>
+        <div class="grid-2">
+          <div class="card">
+            <span class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h13M11 7l5 5-5 5"/><path d="M20 7v10" opacity=".6"/></svg>Velocity</span>
+            <div class="card-value"><span class="num">27,580</span><span class="unit mono">km/h</span></div>
+          </div>
+          <div class="card">
+            <span class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></svg>Visibility</span>
+            <div class="vis-value">
+              <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/>
+                <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.6 4.6l2 2M17.4 17.4l2 2M4.6 19.4l2-2M17.4 6.6l2-2"/>
+              </svg>
+              <span>Daylight</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-spacer"></div>
+
+      <div class="card feed-card">
+        <div class="card-head">
+          <span class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Last updated</span>
+          <span class="feed-meta">Polling · 5s</span>
+        </div>
+        <div class="updated-val mono">3s ago</div>
+        <div class="feed-sub"><span style="display:inline-block; width:5px; height:5px; border-radius:999px; background:#22c55e; box-shadow:0 0 4px rgba(34,197,94,.7);"></span><span class="mono">wheretheiss.at · v1 · 10 fixes</span></div>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>
