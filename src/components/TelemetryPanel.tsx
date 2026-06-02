@@ -1,5 +1,6 @@
 import { formatKm, formatRelative } from '../state';
 import type { State } from '../state';
+import { PANEL_WIDTH_PX } from '../constants';
 import ConnectionStatus from './ConnectionStatus';
 
 type TelemetryPanelProps = { state: State };
@@ -48,7 +49,7 @@ export default function TelemetryPanel({ state }: TelemetryPanelProps) {
   return (
     <aside
       className="relative z-[700] flex h-screen flex-col border-l border-white/[0.06] bg-bg-panel"
-      style={{ width: 360 }}
+      style={{ width: PANEL_WIDTH_PX }}
       aria-label="ISS telemetry"
     >
       <div className="px-[22px] pt-[22px] pb-[18px]">

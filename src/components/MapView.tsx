@@ -2,6 +2,8 @@ import L from 'leaflet';
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import {
+  COLOR_ACCENT_CYAN,
+  COLOR_BG_MAP,
   FLY_TO_DURATION_INITIAL_S,
   FLY_TO_DURATION_RECENTER_S,
   INITIAL_MAP_CENTER,
@@ -181,7 +183,7 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
             [b.lat, b.lon],
           ],
           {
-            color: '#22d3ee',
+            color: COLOR_ACCENT_CYAN,
             weight: 2,
             opacity,
             interactive: false,
@@ -213,7 +215,7 @@ export default function MapView(props: MapViewProps) {
       zoomControl={false}
       attributionControl={true}
       preferCanvas={false}
-      style={{ position: 'absolute', inset: 0, background: '#0a0f17' }}
+      style={{ position: 'absolute', inset: 0, background: COLOR_BG_MAP }}
     >
       <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
       <MapInner {...props} />

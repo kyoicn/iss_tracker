@@ -100,7 +100,7 @@ export function reducer(state: State, action: Action): State {
       return {
         ...state,
         follow: false,
-        hasShownFollowToast: state.hasShownFollowToast || true,
+        hasShownFollowToast: true,
       };
 
     case 'MARKER_VISIBILITY_CHANGE':

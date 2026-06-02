@@ -1,3 +1,5 @@
+import { MOBILE_SHEET_COLLAPSED_PX } from '../constants';
+
 type RecenterButtonProps = {
   onRecenter: () => void;
   isMobile: boolean;
@@ -7,7 +9,7 @@ export default function RecenterButton({ onRecenter, isMobile }: RecenterButtonP
   const baseStyle: React.CSSProperties = isMobile
     ? {
         right: 16,
-        bottom: `calc(80px + env(safe-area-inset-bottom, 0px) + 16px)`,
+        bottom: `calc(${MOBILE_SHEET_COLLAPSED_PX}px + env(safe-area-inset-bottom, 0px) + 16px)`,
         width: 44,
         height: 44,
       }

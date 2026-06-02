@@ -9,6 +9,7 @@ import EdgeArrow from './components/EdgeArrow';
 import { useIssPolling } from './hooks/useIssPolling';
 import { usePageVisibility } from './hooks/usePageVisibility';
 import { useIsMobile } from './hooks/useIsMobile';
+import { PANEL_WIDTH_PX } from './constants';
 import { initialState, reducer } from './state';
 
 export default function App() {
@@ -16,7 +17,6 @@ export default function App() {
   const isVisible = usePageVisibility(dispatch);
   useIssPolling(dispatch, isVisible);
   const isMobile = useIsMobile();
-  const mapRef = useRef<L.Map | null>(null);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const toastTimerRef = useRef<number | null>(null);
@@ -30,7 +30,6 @@ export default function App() {
   }, [isVisible]);
 
   const handleMapReady = useCallback((map: L.Map) => {
-    mapRef.current = map;
     setMapInstance(map);
   }, []);
 
@@ -76,7 +75,7 @@ export default function App() {
     <div className="relative h-screen w-screen overflow-hidden bg-bg-app text-text-primary">
       <div
         className="absolute inset-y-0 left-0"
-        style={{ right: isMobile ? 0 : 360 }}
+        style={{ right: isMobile ? 0 : PANEL_WIDTH_PX }}
       >
         <MapView
           state={state}

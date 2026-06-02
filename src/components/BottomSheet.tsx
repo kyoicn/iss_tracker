@@ -1,5 +1,6 @@
 import { formatRelative } from '../state';
 import type { State } from '../state';
+import { MOBILE_SHEET_COLLAPSED_PX } from '../constants';
 import ConnectionStatus from './ConnectionStatus';
 
 type BottomSheetProps = {
@@ -52,7 +53,9 @@ export default function BottomSheet({ state, onToggleSheet, onCollapse }: Bottom
         aria-label="ISS telemetry"
         className="glass fixed bottom-0 left-0 right-0 z-[800] overflow-hidden rounded-t-2xl border-t border-white/[0.08] shadow-[0_-12px_28px_rgba(0,0,0,0.45)] transition-[height] duration-300 ease-out"
         style={{
-          height: expanded ? 'min(50vh, 470px)' : `calc(80px + env(safe-area-inset-bottom, 0px))`,
+          height: expanded
+            ? 'min(50vh, 470px)'
+            : `calc(${MOBILE_SHEET_COLLAPSED_PX}px + env(safe-area-inset-bottom, 0px))`,
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >

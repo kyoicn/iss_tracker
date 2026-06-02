@@ -21,6 +21,12 @@ export const FLY_TO_DURATION_RECENTER_S = 1.5;
 
 export const BREAKPOINT_MOBILE_PX = 768;
 
+export const PANEL_WIDTH_PX = 360;
+export const MOBILE_SHEET_COLLAPSED_PX = 80;
+
+export const COLOR_BG_MAP = '#0a0f17';
+export const COLOR_ACCENT_CYAN = '#22d3ee';
+
 export function delayFor(failures: number): number {
   const idx = Math.min(Math.max(failures, 0), POLL_BACKOFF_MS.length - 1);
   return POLL_BACKOFF_MS[idx];

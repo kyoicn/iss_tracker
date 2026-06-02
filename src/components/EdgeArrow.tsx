@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type L from 'leaflet';
 import type { IssSample } from '../state';
+import { COLOR_ACCENT_CYAN } from '../constants';
 
 type EdgeArrowProps = {
   current: IssSample;
@@ -66,7 +67,7 @@ export default function EdgeArrow({ current, map, nowMs }: EdgeArrowProps) {
         height="20"
         viewBox="0 0 24 24"
         fill="none"
-        stroke="#22d3ee"
+        stroke={COLOR_ACCENT_CYAN}
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
