@@ -1,4 +1,4 @@
-import { RECONNECT_AFTER_FAILURES, TRAIL_MAX_POINTS } from './constants';
+import { RECONNECT_AFTER_FAILURES, STALE_THRESHOLD_MS, TRAIL_MAX_POINTS } from './constants';
 
 export type IssSample = {
   lat: number;
@@ -125,4 +125,67 @@ export function reducer(state: State, action: Action): State {
       return _exhaustive;
     }
   }
+}
+
+export function formatLat(lat: number): string {
+  const hemi = lat >= 0 ? 'N' : 'S';
+  return `${Math.abs(lat).toFixed(1)}° ${hemi}`;
+}
+
+export function formatLon(lon: number): string {
+  const hemi = lon >= 0 ? 'E' : 'W';
+  return `${Math.abs(lon).toFixed(1)}° ${hemi}`;
+}
+
+export function formatKm(km: number): string {
+  return `${Math.round(km).toLocaleString()} km`;
+}
+
+export function formatKmh(kmh: number): string {
+  return `${Math.round(kmh).toLocaleString()} km/h`;
+}
+
+export function formatRelative(deltaMs: number): { text: string; isStale: boolean } {
+  const isStale = deltaMs > STALE_THRESHOLD_MS;
+  const staleSuffix = isStale ? ' — stale' : '';
+
+  if (deltaMs < 1500) return { text: 'just now', isStale };
+  const sec = Math.round(deltaMs / 1000);
+  if (sec < 60) return { text: `${sec}s ago${staleSuffix}`, isStale };
+  const min = Math.floor(sec / 60);
+  const remSec = sec % 60;
+  if (min < 60) return { text: `${min}m ${remSec}s ago${staleSuffix}`, isStale };
+  const hr = Math.floor(min / 60);
+  const remMin = min % 60;
+  return { text: `${hr}h ${remMin}m ago${staleSuffix}`, isStale };
+}
+
+export function splitOnAntimeridian(trail: TrailPoint[]): TrailPoint[][] {
+  if (trail.length === 0) return [];
+  const segments: TrailPoint[][] = [[trail[0]]];
+  for (let i = 1; i < trail.length; i++) {
+    const prev = trail[i - 1];
+    const curr = trail[i];
+    if (Math.abs(curr.lon - prev.lon) > 180) {
+      segments.push([curr]);
+    } else {
+      segments[segments.length - 1].push(curr);
+    }
+  }
+  return segments;
+}
+
+export function shortPathInterp(
+  a: { lat: number; lon: number },
+  b: { lat: number; lon: number },
+  t: number,
+): [number, number] {
+  const lat = a.lat + (b.lat - a.lat) * t;
+  let bLon = b.lon;
+  if (Math.abs(b.lon - a.lon) > 180) {
+    bLon = b.lon > a.lon ? b.lon - 360 : b.lon + 360;
+  }
+  let lon = a.lon + (bLon - a.lon) * t;
+  lon = ((lon + 540) % 360) - 180;
+  return [lat, lon];
 }

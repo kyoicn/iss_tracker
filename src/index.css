@@ -10,4 +10,110 @@ body,
   background: #0d1117;
   color: #f0f6fc;
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ISS marker (Leaflet divIcon contents) */
+.iss-marker-icon {
+  pointer-events: none;
+}
+.iss-marker-dot {
+  position: absolute;
+  inset: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #22d3ee;
+  box-shadow: 0 0 12px 4px rgba(34, 211, 238, 0.55), 0 0 28px 10px rgba(34, 211, 238, 0.18);
+}
+.iss-marker-halo {
+  position: absolute;
+  left: -14px;
+  top: -14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  animation: marker-halo 2.2s ease-out infinite;
+}
+
+@keyframes marker-halo {
+  0% { transform: scale(0.7); opacity: 0.9; }
+  80% { transform: scale(1.4); opacity: 0; }
+  100% { opacity: 0; }
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 0.65; box-shadow: 0 0 4px rgba(34, 197, 94, 0.5); }
+  50% { opacity: 1; box-shadow: 0 0 10px rgba(34, 197, 94, 0.85); }
+}
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #22c55e;
+  animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes reconnect-pulse {
+  0%, 100% { opacity: 0.5; box-shadow: 0 0 4px rgba(245, 158, 11, 0.4); }
+  50% { opacity: 1; box-shadow: 0 0 10px rgba(245, 158, 11, 0.7); }
+}
+.reconnect-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #f59e0b;
+  animation: reconnect-pulse 3s ease-in-out infinite;
+}
+
+.glass {
+  background: rgba(22, 27, 34, 0.78);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(240, 246, 252, 0.08);
+}
+.glass-soft {
+  background: rgba(22, 27, 34, 0.62);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(240, 246, 252, 0.08);
+}
+
+/* Dim the CartoDB tiles slightly for better contrast under chrome */
+.leaflet-tile {
+  filter: brightness(0.95);
+}
+
+/* Hide leaflet's default focus outline on the map container */
+.leaflet-container:focus { outline: none; }
+
+/* Override leaflet attribution colors for dark theme */
+.leaflet-control-attribution {
+  background: rgba(13, 17, 23, 0.6) !important;
+  color: #8b949e !important;
+  font-size: 10.5px !important;
+}
+.leaflet-control-attribution a {
+  color: #c9d1d9 !important;
+}
+
+/* Toast slide-in */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.toast-in {
+  animation: toast-in 200ms ease-out;
+}
+
+/* Edge arrow nudge */
+@keyframes edge-nudge {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.08); }
+}
+.edge-arrow {
+  animation: edge-nudge 1.6s ease-in-out infinite;
 }
