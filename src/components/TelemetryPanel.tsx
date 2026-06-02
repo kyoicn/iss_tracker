@@ -16,16 +16,10 @@ function MetricCard({
 }) {
   return (
     <div className="rounded-[10px] border border-white/[0.06] bg-bg-card px-[15px] py-[13px] transition-colors hover:border-accent-cyan-soft/20">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center">
         <span className="flex items-center gap-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-text-muted">
           {icon}
           {label}
-        </span>
-        <span
-          className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-slate-400/30 font-mono text-[9px] text-text-muted"
-          aria-hidden="true"
-        >
-          ?
         </span>
       </div>
       <div className="mt-1.5">{children}</div>

@@ -37,7 +37,7 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
   const trailLayerRef = useRef<L.LayerGroup | null>(null);
   const rafRef = useRef<number | null>(null);
   const jumpTimeoutRef = useRef<number | null>(null);
-  const isProgrammaticMoveRef = useRef<boolean>(false);
+  const programmaticPendingRef = useRef<number>(0);
   const lastSampleAtRef = useRef<number | null>(null);
   const followRef = useRef<boolean>(state.follow);
   followRef.current = state.follow;
@@ -59,17 +59,20 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
     trailLayerRef.current = trailLayer;
 
     const handleMoveStart = () => {
-      if (!isProgrammaticMoveRef.current) onMapInteract();
+      if (programmaticPendingRef.current > 0) return;
+      onMapInteract();
     };
     const handleZoomStart = () => {
-      if (!isProgrammaticMoveRef.current) onMapInteract();
+      if (programmaticPendingRef.current > 0) return;
+      onMapInteract();
     };
     const handleMoveEnd = () => {
-      isProgrammaticMoveRef.current = false;
+      if (programmaticPendingRef.current > 0) {
+        programmaticPendingRef.current -= 1;
+      }
       const m = markerRef.current;
       if (!m) return;
-      const latlng = m.getLatLng();
-      const onScreen = map.getBounds().contains(latlng);
+      const onScreen = map.getBounds().contains(m.getLatLng());
       onMarkerVisibilityChange(onScreen);
     };
 
@@ -124,7 +127,7 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
         m.setLatLng(target);
         m.setOpacity(1);
         if (followRef.current) {
-          isProgrammaticMoveRef.current = true;
+          programmaticPendingRef.current += 1;
           map.flyTo(target, ISS_LOCK_ZOOM, {
             duration: isFirstFix ? FLY_TO_DURATION_INITIAL_S : FLY_TO_DURATION_RECENTER_S,
           });
@@ -149,7 +152,7 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
         } else {
           rafRef.current = null;
           if (followRef.current) {
-            isProgrammaticMoveRef.current = true;
+            programmaticPendingRef.current += 1;
             map.panTo(target, { animate: true, duration: 0.4 });
           } else {
             onMarkerVisibilityChange(map.getBounds().contains(target));
@@ -202,7 +205,7 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
     if (!state.follow) return;
     const sample = state.current;
     if (!sample) return;
-    isProgrammaticMoveRef.current = true;
+    programmaticPendingRef.current += 1;
     map.flyTo([sample.lat, sample.lon], ISS_LOCK_ZOOM, {
       duration: FLY_TO_DURATION_RECENTER_S,
     });

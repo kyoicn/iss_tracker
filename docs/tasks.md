@@ -215,3 +215,20 @@ Both tasks write to distinct files. They share the `Action` and `IssSample` type
 - Group 2: 4 parallel tasks (constants, state/reducer, api client, page visibility hook).
 - Group 3: 2 parallel tasks (polling hook, App wiring).
 - Total: 7 tasks across 3 groups vs. 7 sequential tasks — roughly 3x faster wall-clock (longest path is Group 1 -> Group 2's slowest -> Group 3's slowest).
+
+---
+
+## QA Findings — Iter 2 (added 2026-06-02 by QA gate, see `docs/qa-report.md`)
+
+Iter-2 functional walkthrough verified all 6 P0 CUJs PASS both runs. QA gate verdict: **FAIL** (any bug ⇒ FAIL per gate rules). The following fix tasks are queued before iter-2 can be declared complete. None of these are launch blockers individually, but per the deterministic gate rule, the iteration is not done until they are addressed or explicitly waived.
+
+### QA fix tasks (severity-tagged)
+
+- [ ] **QA-fix [MEDIUM][FLAKY]**: Eliminate Recenter ↔ poll-tween race in `src/components/MapView.tsx`. The shared `isProgrammaticMoveRef` boolean is reset by every `moveend`, so a poll-driven `panTo` finishing between the recenter's `SET_FOLLOW(true)` dispatch and the recenter `flyTo`'s movestart can let a stray event leak through as `MAP_INTERACTED`, flipping Follow back OFF. Suggested approach: replace the shared boolean with a per-animation token or count, so each programmatic animation owns its own pending-end flag. Acceptance: clicking Recenter under continuous polling never leaves Follow in OFF state across 20 consecutive trials. — source: qa-report.md 2026-06-02
+- [ ] **QA-fix [LOW][BUG]**: Resolve the "?" indicator on telemetry metric cards (`src/components/TelemetryPanel.tsx:24-29`). Either implement the P1 hover tooltip wired to mock `docs/ux/prd-001-iss-live-tracker-mockups/cuj-3-desktop-tooltip.html`, or remove the icon. The current state misleadingly implies tooltips exist. — source: qa-report.md 2026-06-02
+- [ ] **QA-fix [LOW][BUG]**: Add a favicon (or `<link rel="icon">` placeholder) to eliminate the 404 console error on every page load. — file: `index.html` — source: qa-report.md 2026-06-02
+
+### QA coverage gaps (not bugs, but recommended before launch)
+
+- [ ] **QA-followup**: Add a CUJ-6 memory soak test (1hr session + DevTools heap snapshot) to verify the <10MB-growth criterion that was marked NOT_RUN this iteration. — source: qa-report.md 2026-06-02
+- [ ] **QA-followup**: Add a real touch-emulation Playwright test for the mobile bottom-sheet drag-to-collapse gesture (current coverage exercises only the tap path). — source: qa-report.md 2026-06-02
