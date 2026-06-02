@@ -8,3 +8,6 @@ dist/
 coverage/
 playwright-report/
 test-results/
+.playwright-mcp/
+iter*.png
+*.png
