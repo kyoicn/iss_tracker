@@ -35,6 +35,7 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
   const markerRef = useRef<L.Marker | null>(null);
   const labelRef = useRef<L.Marker | null>(null);
   const trailLayerRef = useRef<L.LayerGroup | null>(null);
+  const liveSegmentRef = useRef<L.Polyline | null>(null);
   const rafRef = useRef<number | null>(null);
   const jumpTimeoutRef = useRef<number | null>(null);
   const programmaticPendingRef = useRef<number>(0);
@@ -57,6 +58,19 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
     const trailLayer = L.layerGroup();
     trailLayer.addTo(map);
     trailLayerRef.current = trailLayer;
+
+    // Live segment: the in-progress segment from `previous` to the marker's
+    // currently-animated position. Updated each rAF frame so the trail grows
+    // at the same rate the marker moves, never ahead of it.
+    const liveSegment = L.polyline([], {
+      color: COLOR_ACCENT_CYAN,
+      weight: 2,
+      opacity: 1,
+      interactive: false,
+      lineCap: 'round',
+    });
+    liveSegment.addTo(map);
+    liveSegmentRef.current = liveSegment;
 
     const handleMoveStart = () => {
       if (programmaticPendingRef.current > 0) return;
@@ -90,6 +104,7 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
       if (jumpTimeoutRef.current !== null) window.clearTimeout(jumpTimeoutRef.current);
       marker.remove();
       labelRef.current?.remove();
+      liveSegment.remove();
       trailLayer.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -120,7 +135,11 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
     const shouldJump = !prev || gapMs > TRAIL_GAP_THRESHOLD_MS;
     const isFirstFix = lastSampleAtRef.current === null;
 
+    const liveSeg = liveSegmentRef.current;
+
     if (shouldJump) {
+      // Deliberate visual gap on long outage / first fix / tab resume.
+      liveSeg?.setLatLngs([]);
       m.setOpacity(0);
       jumpTimeoutRef.current = window.setTimeout(() => {
         jumpTimeoutRef.current = null;
@@ -142,11 +161,20 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
       const duration = Math.min(gapMs, 5000);
       const a = { lat: prev!.lat, lon: prev!.lon };
       const b = { lat: sample.lat, lon: sample.lon };
+      // Skip the live segment for antimeridian-spanning tweens — drawing a
+      // polyline whose endpoints wrap the seam would cut across the map.
+      const wraps = Math.abs(b.lon - a.lon) > 180;
+      if (wraps) {
+        liveSeg?.setLatLngs([]);
+      } else {
+        liveSeg?.setLatLngs([[a.lat, a.lon], [a.lat, a.lon]]);
+      }
 
       const tween = () => {
         const t = Math.min(1, (performance.now() - startMs) / duration);
         const [lat, lon] = shortPathInterp(a, b, t);
         m.setLatLng([lat, lon]);
+        if (!wraps) liveSeg?.setLatLngs([[a.lat, a.lon], [lat, lon]]);
         if (t < 1) {
           rafRef.current = requestAnimationFrame(tween);
         } else {
@@ -169,7 +197,12 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
     if (!layer) return;
     layer.clearLayers();
 
-    const segments = splitOnAntimeridian(state.trail);
+    // Drop the newest point — the segment ending at it is owned by the live
+    // segment polyline, which the marker tween updates each frame. This
+    // prevents the historical trail from extending past the marker's
+    // currently-animated position (CUJ-1 step 3).
+    const history = state.trail.slice(0, -1);
+    const segments = splitOnAntimeridian(history);
     for (const segment of segments) {
       if (segment.length < 2) continue;
       for (let i = 1; i < segment.length; i++) {
