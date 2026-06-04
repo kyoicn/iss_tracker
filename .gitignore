@@ -11,3 +11,4 @@ test-results/
 .playwright-mcp/
 iter*.png
 *.png
+docs/issues-attachments/
