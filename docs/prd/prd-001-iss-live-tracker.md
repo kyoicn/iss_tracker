@@ -60,7 +60,7 @@ Rate limit: ~1 request/sec. We poll at 0.2 req/sec (every 5s), which leaves ampl
 | ID | Title | Status | Priority |
 |---|---|---|---|
 | CUJ-1 | First load and live tracking glance | [x] Complete | P0 |
-| CUJ-2 | Toggle Follow off to explore the map, then recenter | [x] Complete | P0 |
+| CUJ-2 | Zoom freely while following; pan to explore, recenter to return | [~] In progress (zoom decoupling + zoom-preserving Recenter unimplemented) | P0 |
 | CUJ-3 | Read detailed telemetry to understand current ISS state | [~] In progress (P1 hover tooltip deferred) | P0 |
 | CUJ-4 | Use the tracker on a phone (mobile bottom sheet) | [~] In progress (swipe/drag-to-collapse gesture deferred) | P0 |
 | CUJ-5 | Lose connectivity, see graceful recovery | [x] Complete | P0 |
@@ -136,43 +136,57 @@ Mocks to be produced:
 
 ---
 
-### CUJ-2: Toggle Follow off to explore the map, then recenter
+### CUJ-2: Zoom freely while following; pan to explore, recenter to return
 
-**Status**: [x] Complete
+**Status**: [~] In progress (refined 2026-06-05; zoom decoupling + zoom-preserving Recenter unimplemented)
 **Dependencies**: CUJ-1
 **Priority**: P0 (launch blocker)
 
 > Implementation note: the original `[MEDIUM][FLAKY]` race between the follow-recenter `flyTo` and the poll-driven `panTo` was fixed in commit `19e833f` by replacing the shared `isProgrammaticMoveRef` boolean with a counter (`programmaticPendingRef`) — see `src/components/MapView.tsx:40, 62, 66, 70-72, 130, 155, 208`. Code review confirms each programmatic move owns exactly one increment/decrement, so concurrent animations cannot leak a real `movestart` through to `onMapInteract`. Dynamic re-walk in a live browser was blocked by Playwright MCP unavailability in the QA agent's environment; recommend a one-shot re-walk (pan off-screen → click Recenter → wait through one poll → verify Follow stays ON) once Playwright MCP is installed.
 
 #### Context
-The user notices the ISS is over a region they want to look at more closely (e.g., "oh, it's over Japan — let me zoom in"). They need to pan/zoom without the map fighting them by auto-recentering every 5 seconds. After exploring, they want a one-tap way to snap back to following the ISS.
+The map's only meaningful content is the ISS — there's no terrain to explore for its own sake. So the two viewport gestures carry different meanings: a **zoom** is the user saying "let me see the ISS at a different scale," and a **pan** is the user saying "let me look somewhere else for a moment." This CUJ decouples them: zooming keeps Follow ON and immediately re-anchors the map on the ISS at the new zoom level, while panning disables Follow so the user can explore without the map fighting back. A single Recenter affordance returns them to following — preserving whatever zoom level they chose.
 
 #### Preconditions
 - CUJ-1 is complete: the page is loaded, marker is visible, telemetry is populated.
-- The Follow toggle is ON by default (map auto-centers on each poll).
+- The Follow toggle is ON by default (map auto-centers on each poll at the current zoom level).
 
 #### Journey Steps
 
-1. **User action**: Attempts to drag the map (mouse drag on desktop, touch drag on mobile) OR zooms in (scroll wheel / pinch).
-   - **System response**: The map pans/zooms as the user expects. The Follow toggle automatically switches OFF, indicating the system has detected manual interaction. (Rationale: explicitly toggling Follow off before every pan is friction; auto-disable matches user intent.)
-   - **User sees**: The Follow toggle (a labeled switch in the top-right corner of the map area, "Follow ISS" with an on/off pill) animates from cyan/on to gray/off. A small toast or inline label briefly appears near the toggle: "Follow off — map won't auto-center." (Toast auto-dismisses after 2s.)
-   - **Details**: Toggle position: top-right of the map, 16px from top and right edges. Size: ~120px wide × 32px tall, dark glass background (`bg-slate-900/80 backdrop-blur`), 1px cyan border when on, gray border when off. The toast uses the same glass treatment, positioned just below the toggle.
+1. **User action**: Zooms the map via scroll wheel, pinch, double-click, or keyboard `+` / `-`.
+   - **System response**: Leaflet applies the zoom to the new level. Because zoom gestures anchor on the cursor (or pinch midpoint), the map center may have shifted off the ISS. Within the same tick, the app issues a short `flyTo([iss.lat, iss.lon], newZoom, { duration: 0.3 })` to re-anchor on the ISS at the new zoom. Follow remains ON. No toast, no toggle-state change, no other UI feedback.
+   - **User sees**: The world appears to zoom in or out around the ISS marker — even if the cursor was offset from the marker, the ISS smoothly slides back to the screen center over ~300ms at the new zoom. The Follow toggle stays cyan/ON. Polling continues; the trail keeps growing; telemetry keeps ticking.
+   - **Details**: Re-anchor duration is intentionally shorter than the Recenter flyTo (300ms vs 1500ms) so it reads as "the map staying with me at the new zoom" rather than a discrete jump. The re-anchor uses the counter-based `programmaticPendingRef` guard so it does not itself disable Follow. Zoom-out is unbounded by app logic — Leaflet's tile-source minimum applies. Zoom-in respects Leaflet's max tile zoom.
 
-2. **User action**: Continues to pan/zoom freely.
-   - **System response**: Map responds to all gestures. Polling continues in the background. The ISS marker continues to update its position on the map (moving across the user's current view) and the trail continues to extend. The map does NOT recenter on the marker. Telemetry continues to update.
-   - **User sees**: The map stays where they put it. The ISS marker may drift toward or away from the visible viewport. If the marker drifts off-screen, a directional arrow appears at the edge of the viewport closest to the ISS's current position, pointing toward it. The arrow is cyan, ~24px, with a soft glow.
-   - **Details**: The off-screen arrow position is computed from the line between the viewport center and the ISS lat/long, clipped to the viewport edge with a 16px inset. The arrow rotates to point in the correct direction. If the ISS is on-screen, no arrow is shown.
+2. **User action**: Pans the map via mouse drag (desktop) or single-finger drag (touch).
+   - **System response**: Map pans as dragged. Follow flips OFF on the first detected user-initiated `movestart`. On the first auto-disable of a given session, a small glass toast appears just below the Follow toggle: "Follow off — map won't auto-center." Toast auto-dismisses after 2s; subsequent pans within the same session do NOT re-show it. Polling continues; marker position keeps updating on the map but the map does NOT recenter.
+   - **User sees**: The Follow toggle pill animates from cyan/ON to gray/OFF (~150ms). The "Follow off" toast fades in below the toggle (first time only). The map stays where the user dragged it. The ISS marker continues to glide based on incoming polls; it may drift toward or away from the viewport edge.
+   - **Details**: Toggle position: top-right of the map, 16px from top and right edges. Size: ~120px wide × 32px tall, dark glass (`bg-slate-900/80 backdrop-blur`), 1px cyan border when ON, 1px gray border when OFF. Toast uses the same glass treatment, ~280px wide, 12px text.
 
-3. **User action**: Decides to return to tracking. Either taps the Follow toggle, OR taps a "Recenter" floating button.
-   - **System response**: When the ISS is off-screen, a "Recenter" floating action button appears in the bottom-right of the map area (above the attribution footer, ~16px inset). The button is a circle, 48px diameter, cyan background, white centered "crosshair/target" icon. Tapping either control: (a) flies the map to the current ISS position with a smooth pan/zoom (1500ms Leaflet `flyTo`), (b) restores zoom level 3, (c) turns the Follow toggle back ON.
-   - **User sees**: The map smoothly flies back to the ISS. The Follow toggle pill animates back to cyan/on. The off-screen arrow disappears. The Recenter button fades out (200ms) once Follow is back on.
-   - **Details**: The Recenter button only appears when (Follow is off) AND (ISS marker is outside the current map viewport). When ISS is off-screen but Follow is on (shouldn't normally happen, but as a guard), Follow continues to recenter automatically.
+3. **User action**: Continues to interleave pan and zoom gestures while Follow is OFF.
+   - **System response**: Each pan keeps Follow OFF. Each zoom is applied but does NOT re-anchor on the ISS (the immediate re-anchor in step 1 only runs when Follow is ON). Polling continues. If the ISS marker drifts outside the current viewport, a directional edge arrow appears at the nearest viewport edge pointing toward the ISS, and the Recenter floating action button fades in at the bottom-right of the map.
+   - **User sees**: The map stays where the user left it. When the marker drifts off-screen, a cyan ~24px chevron with a soft glow appears at the viewport edge pointing toward the ISS, rotating to track the bearing as the ISS moves. A 48px circular cyan Recenter button (white crosshair icon) appears in the bottom-right (~16px inset, above the attribution footer). On mobile, the Recenter button sits just above the bottom sheet with safe-area padding.
+   - **Details**: Edge arrow position is computed from the line between the viewport center and the ISS lat/long, clipped to the viewport edge with a 16px inset. Recenter button visibility predicate: `(follow === false) && (iss is outside current viewport bounds)`. When ISS is on-screen with Follow OFF, neither arrow nor Recenter button are shown.
+
+4. **User action**: Taps the Recenter button, OR re-taps the Follow toggle to turn it ON.
+   - **System response**: The app reads the map's **current zoom level** and issues `flyTo([iss.lat, iss.lon], currentZoom, { duration: 1.5 })`. Follow flips back to ON. The edge arrow and Recenter button fade out (200ms) once Follow is ON.
+   - **User sees**: The map smoothly glides to center on the ISS over ~1500ms, holding whatever zoom the user had chosen. The Follow toggle pill animates back to cyan/ON. Arrow and Recenter button disappear.
+   - **Details**: The current-zoom preservation is the key difference from CUJ-1's first-load lock-on, which uses `ISS_LOCK_ZOOM=3` as an introductory framing. Recenter never resets to `ISS_LOCK_ZOOM`; the user's zoom is sacred once they've expressed a preference. The flyTo uses the counter-based programmatic-move guard so the concurrent next poll cannot leak a `movestart` and re-disable Follow.
+
+5. **User action**: Continues using the tracker, freely interleaving zoom (Follow stays ON) and pan (Follow flips OFF, recover via Recenter).
+   - **System response**: Each gesture has its own clean meaning per the rules above. Polling, telemetry, and trail behavior are unaffected throughout.
+   - **User sees**: A map that respects intent — zoom doesn't penalize the user with a lost follow, pan doesn't fight the user with auto-recentering.
+   - **Details**: No additional state to surface; the toggle, edge arrow, and Recenter button are the only chrome involved.
 
 #### Edge Cases & Error States
+- **User zooms but does not pan**: Follow STAYS ON. The map immediately re-anchors on the ISS at the new zoom level via a ~300ms `flyTo`. (This inverts the prior behavior where any zoom disabled Follow.)
+- **User pinches on a touchscreen with finger drift (pan + zoom in the same gesture)**: The pan component disables Follow; the zoom component is applied. End state: Follow=OFF, zoom at the new level. The "immediate re-anchor" of step 1 does NOT run because Follow is now OFF.
+- **User zooms out below `INITIAL_MAP_ZOOM=2` while following**: No special behavior — the map zooms out as requested and re-anchors on the ISS. Leaflet's default minimum zoom for OSM-style tiles (0) is allowed.
+- **User zooms to Leaflet's max tile zoom while following**: Map stays centered on the ISS at max zoom; user sees a tile-resolution view around the sub-point. Acceptable.
 - **User toggles Follow off but keeps the map centered on the ISS, then waits**: Map does not auto-recenter on next poll. As the ISS moves, it drifts away from center within the viewport. Eventually it leaves the viewport — arrow + Recenter button appear at that point.
+- **Recenter while ISS is on-screen but Follow is OFF** (user panned slightly): Recenter still flies to the ISS at the **current zoom level** and flips Follow back ON. Zoom is preserved.
 - **User pans, then API fails**: Same as CUJ-5 — "Reconnecting…" appears in the panel. The map remains where the user left it. Follow remains off.
 - **User pans while Follow is on, then quickly stops**: Follow auto-disables on the first pan gesture. We do not "re-enable Follow if the user appears to have only nudged the map." Once off, it stays off until explicitly turned on again.
-- **User zooms but does not pan**: Zoom also disables Follow (per step 1). Reasoning: if the user zoomed in, they want to inspect a region; auto-recentering would yank them away.
 - **Touch device — user taps the marker accidentally**: Tap on marker does NOT disable Follow and does NOT show a popup in v1. The marker is non-interactive in v1. (Future: tap to show ISS info card.)
 
 #### Mocks / Reference Designs
@@ -187,13 +201,15 @@ Mocks to be produced:
 #### Acceptance Criteria
 - [x] Follow toggle is visible in the top-right of the map at all times.
 - [x] Toggle defaults to ON on page load.
-- [x] Any user-initiated pan or zoom automatically switches Follow to OFF.
+- [ ] User-initiated **pan** (mouse drag, single-finger touch drag) automatically switches Follow to OFF.
+- [ ] User-initiated **zoom** (scroll wheel, pinch, double-click, keyboard `+` / `-`) does NOT change Follow's state.
 - [x] When Follow is OFF, the map does not auto-recenter on poll updates.
 - [x] Polling and marker updates continue regardless of Follow state.
 - [x] When Follow is OFF and the ISS marker is outside the viewport, a directional arrow appears at the nearest viewport edge pointing toward the marker.
 - [x] When Follow is OFF and the ISS marker is outside the viewport, a Recenter floating button appears in the bottom-right of the map.
-- [x] Tapping the Recenter button OR re-enabling Follow flies the map back to the ISS over ~1500ms and turns Follow ON. (Race vs. concurrent poll fixed in `19e833f` via counter-based programmatic-move guard.)
+- [ ] Tapping the Recenter button OR re-enabling Follow flies the map back to the ISS at the user's **current zoom level** (not reset to `ISS_LOCK_ZOOM`) over ~1500ms and turns Follow ON. (Race vs. concurrent poll fixed in `19e833f` via counter-based programmatic-move guard.)
 - [x] A brief "Follow off" toast appears the first time Follow is auto-disabled in a session (max once per session is acceptable).
+- [ ] When Follow is ON and the user zooms via any gesture, the map immediately re-anchors on the ISS at the new zoom level via a ~300ms `flyTo`.
 
 ---
 

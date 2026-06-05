@@ -1,7 +1,7 @@
 # Project Status
 
 > Auto-generated project status summary.
-> Last updated: 2026-06-02
+> Last updated: 2026-06-05 02:08:52 (UTC+8)
 
 ## Overview
 
@@ -32,6 +32,26 @@ Single-direction data flow: `useIssPolling` fetches the live API → dispatches 
 - **Programmatic-move guard**: `programmaticPendingRef` in `MapView.tsx` is a counter (not a boolean) incremented before every `flyTo`/`panTo` and decremented on the corresponding `moveend`. This prevents poll-driven or follow-driven map moves from firing `MAP_INTERACTED` and accidentally disabling Follow.
 - **Layout**: desktop (≥768 px) uses a fixed 360 px right panel (`TelemetryPanel`); mobile (<768 px) uses a fixed bottom sheet (`BottomSheet`) with collapsed (~80 px) and expanded (~50 vh) states, determined by `useIsMobile` (a `matchMedia` listener).
 
+## CUJ Status
+
+The authoritative per-CUJ snapshot. Each row records the latest known state across three independent dimensions: **Impl** (does the code exist?), **QA** (engineering verification), **PM** (product judgment). Derived from `docs/qa-report.md` and the codebase — PRDs are spec only.
+
+| CUJ | PRD | Priority | Impl | QA | PM |
+|-----|-----|----------|------|----|----|
+| CUJ-1: First load and live tracking glance | prd-001 | P0 | merged | PASS | — |
+| CUJ-2: Zoom freely while following; pan to explore, recenter to return | prd-001 | P0 | not started | — | — |
+| CUJ-3: Read detailed telemetry | prd-001 | P0 | merged | PASS | — |
+| CUJ-4: Mobile bottom sheet | prd-001 | P0 | merged | PASS | — |
+| CUJ-5: Graceful reconnect / stale indicator | prd-001 | P0 | merged | PASS | — |
+| CUJ-6: Long session / page visibility pausing | prd-001 | P0 | merged | NOT_RUN (AC#4 memory soak) | — |
+
+**Column values:**
+- `Impl`: `not started` | `in progress` | `merged`
+- `QA`: `PASS` | `FAIL` | `BLOCKED` | `NOT_RUN` | `WAIVED` | `—` (no QA run yet)
+- `PM`: `Satisfied` | `Caveats` | `Not done` | `—` (no PM review yet)
+
+A CUJ is **fully done** when Impl=`merged`, QA=`PASS`, AND PM=`Satisfied`. CUJ-2 was reset to `not started` on 2026-06-05 because the spec changed (zoom now keeps Follow ON; Recenter preserves user zoom). The existing `src/components/MapView.tsx` implementation no longer matches.
+
 ## Feature Status
 
 ### Implemented (QA-verified PASS)
@@ -49,13 +69,6 @@ All items below passed both QA run 1 and run 2, and are confirmed working in a r
 - "Last updated" relative timer ticks every 1 s via a separate `setInterval` in `App.tsx`.
 - No console errors during normal operation (favicon 404 resolved in commit `19e833f`).
 
-**CUJ-2 — Follow toggle / Recenter / edge arrow**
-- Follow toggle (`FollowToggle.tsx`) visible top-right, defaults ON.
-- Any user pan or zoom auto-disables Follow and shows a "Follow off" toast (once per session, 2200 ms auto-dismiss, `role="status"`).
-- When Follow is OFF and ISS is off-screen: directional `EdgeArrow` and `RecenterButton` FAB appear.
-- Recenter button click or re-enabling Follow triggers `flyTo` back to ISS at zoom 3 and restores Follow ON.
-- Polling and marker updates continue regardless of Follow state.
-- Race condition between follow-recenter `flyTo` and poll-driven `panTo` fixed in `MapView.tsx` via counter-based `programmaticPendingRef` (commit `19e833f`).
 
 **CUJ-3 — Detailed telemetry panel**
 - Desktop right panel (360 px wide) shows all six fields: Latitude, Longitude, Altitude, Velocity, Visibility, Last updated.
@@ -96,9 +109,9 @@ All items below passed both QA run 1 and run 2, and are confirmed working in a r
 - `npm run build` passes; bundle 97.4 kB gzipped (87 modules).
 - Favicon: `public/favicon.svg` (dark navy + cyan target rings) + `<link rel="icon">` in `index.html`.
 
-### In Progress
+### In Progress / Not Started
 
-- **CUJ-2 race condition — dynamic re-verification pending**: The counter-based `programmaticPendingRef` fix (`MapView.tsx:40, 62, 66, 70-72, 130, 155, 208`) is structurally correct per code review but has not been re-verified in a live browser session because the QA agent's Playwright MCP was unavailable. To close: install Playwright MCP (`claude mcp add --scope user playwright -- npx -y @playwright/mcp@latest`) and walk CUJ-2's Recenter path under continuous polling.
+- **CUJ-2 — Zoom-decoupled Follow + zoom-preserving Recenter (spec changed 2026-06-05)**: The PRD was refined today. The prior behavior ("any pan or zoom disables Follow; Recenter flies to ISS at `ISS_LOCK_ZOOM=3`") has been replaced with a new spec: only pan disables Follow; zoom keeps Follow ON and immediately re-anchors on the ISS at the new zoom level (~300ms `flyTo`); Recenter preserves the user's current zoom rather than resetting to `ISS_LOCK_ZOOM`. Acceptance criteria #3, #8, and new #10 in `docs/prd/prd-001-iss-live-tracker.md` are now `[ ]`. The existing `MapView.tsx` implementation no longer matches the spec. Prior QA results and PM verdicts are invalidated — this CUJ is reset to `not started`.
 
 ### Planned / Deferred
 
@@ -199,7 +212,7 @@ Active areas: `src/components/MapView.tsx` (most recent changes — race fix and
 
 ### Open (not yet fixed)
 
-- **[MEDIUM][FLAKY] CUJ-2 — Recenter race — dynamic re-verification blocked**: Counter-based fix is in `MapView.tsx` (commit `19e833f`) and is structurally correct per code review. Cannot be dynamically verified until Playwright MCP is available. Install with: `claude mcp add --scope user playwright -- npx -y @playwright/mcp@latest`, then re-walk CUJ-2 Recenter path.
+- **[HIGH] CUJ-2 — Spec changed 2026-06-05, implementation does not match**: `src/components/MapView.tsx` still implements the old behavior (any zoom disables Follow; Recenter resets to `ISS_LOCK_ZOOM=3`). The new spec requires: (1) zoom keeps Follow ON + immediately re-anchors on ISS at new zoom via ~300ms `flyTo`; (2) pan disables Follow (unchanged); (3) Recenter flies to ISS at the user's **current zoom** (not `ISS_LOCK_ZOOM`). PRD ACs #3, #8, and #10 are `[ ]`. Needs re-implementation before CUJ-2 can be QA-walked or PM-reviewed.
 
 ### Coverage gaps (not bugs, flagged for pre-launch)
 

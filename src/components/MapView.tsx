@@ -39,9 +39,12 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
   const rafRef = useRef<number | null>(null);
   const jumpTimeoutRef = useRef<number | null>(null);
   const programmaticPendingRef = useRef<number>(0);
+  const isZoomingRef = useRef<boolean>(false);
   const lastSampleAtRef = useRef<number | null>(null);
   const followRef = useRef<boolean>(state.follow);
   followRef.current = state.follow;
+  const currentSampleRef = useRef(state.current);
+  currentSampleRef.current = state.current;
 
   useEffect(() => {
     onMapReady(map);
@@ -74,11 +77,31 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
 
     const handleMoveStart = () => {
       if (programmaticPendingRef.current > 0) return;
+      // Cursor-anchored zoom shifts the center as a side effect, firing
+      // movestart even though the user is zooming, not panning. Skip those.
+      if (isZoomingRef.current) return;
       onMapInteract();
     };
     const handleZoomStart = () => {
+      isZoomingRef.current = true;
+    };
+    const handleZoomEnd = () => {
+      isZoomingRef.current = false;
+      // If this was a programmatic zoom (flyTo), the counter already covers it;
+      // moveend will decrement. Re-anchor logic only applies to user zooms.
       if (programmaticPendingRef.current > 0) return;
-      onMapInteract();
+      if (!followRef.current) return;
+      const sample = currentSampleRef.current;
+      if (!sample) return;
+      // Defer to the next tick so the wheel-zoom's own moveend finishes before
+      // our re-anchor flyTo's events start. Avoids event interleaving.
+      window.setTimeout(() => {
+        if (!followRef.current) return;
+        const s = currentSampleRef.current;
+        if (!s) return;
+        programmaticPendingRef.current += 1;
+        map.flyTo([s.lat, s.lon], map.getZoom(), { duration: 0.3 });
+      }, 0);
     };
     const handleMoveEnd = () => {
       if (programmaticPendingRef.current > 0) {
@@ -92,14 +115,14 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
 
     map.on('movestart', handleMoveStart);
     map.on('zoomstart', handleZoomStart);
+    map.on('zoomend', handleZoomEnd);
     map.on('moveend', handleMoveEnd);
-    map.on('zoomend', handleMoveEnd);
 
     return () => {
       map.off('movestart', handleMoveStart);
       map.off('zoomstart', handleZoomStart);
+      map.off('zoomend', handleZoomEnd);
       map.off('moveend', handleMoveEnd);
-      map.off('zoomend', handleMoveEnd);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       if (jumpTimeoutRef.current !== null) window.clearTimeout(jumpTimeoutRef.current);
       marker.remove();
@@ -147,7 +170,9 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
         m.setOpacity(1);
         if (followRef.current) {
           programmaticPendingRef.current += 1;
-          map.flyTo(target, ISS_LOCK_ZOOM, {
+          // First-fix uses the introductory lock-on zoom; later jumps (e.g.,
+          // tab-resume after hours) preserve whatever zoom the user has set.
+          map.flyTo(target, isFirstFix ? ISS_LOCK_ZOOM : map.getZoom(), {
             duration: isFirstFix ? FLY_TO_DURATION_INITIAL_S : FLY_TO_DURATION_RECENTER_S,
           });
         } else {
@@ -239,7 +264,9 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
     const sample = state.current;
     if (!sample) return;
     programmaticPendingRef.current += 1;
-    map.flyTo([sample.lat, sample.lon], ISS_LOCK_ZOOM, {
+    // Recenter preserves the user's current zoom — zoom and Follow are
+    // independent axes (CUJ-2 refined). Do NOT snap back to ISS_LOCK_ZOOM.
+    map.flyTo([sample.lat, sample.lon], map.getZoom(), {
       duration: FLY_TO_DURATION_RECENTER_S,
     });
     // Only fire on follow flipping ON — sample-driven recentering is owned by the

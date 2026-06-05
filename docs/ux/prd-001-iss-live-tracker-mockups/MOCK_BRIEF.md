@@ -44,13 +44,13 @@ ISS Live Tracker is a single-page web app that shows where the International Spa
 - Telemetry values: monospace font, `tabular-nums`, value 24px white-ish (`text-slate-100`), label 10px uppercase tracking-wider muted (`text-slate-400`).
 - Side panel (desktop): fixed right, ~320px wide, full height, `bg-slate-950/90 backdrop-blur` with a 1px cyan-tinted left border.
 
-### CUJ-2: Toggle Follow off to explore the map, then recenter
-**One-line summary**: User pans/zooms the map; Follow auto-disables; when the ISS drifts off-screen, an edge arrow and a Recenter button appear.
+### CUJ-2: Zoom freely while following; pan to explore, recenter to return
+**One-line summary**: Zoom keeps Follow ON and re-anchors the map on the ISS at the new zoom level; pan disables Follow so the user can explore; when the ISS drifts off-screen, an edge arrow and a Recenter button appear, and Recenter returns to following at the user's current zoom (not reset).
 **States to mock**:
-- `cuj-2-desktop-follow-on.html` — Follow toggle ON (cyan pill, "Follow ISS" label with on state). Map centered on ISS. No Recenter button, no edge arrow.
-- `cuj-2-desktop-follow-off-onscreen.html` — Follow OFF (gray pill, off state). Map is panned but marker still in viewport. No edge arrow, no Recenter button. Subtle toast just below the toggle: "Follow off — map won't auto-center."
-- `cuj-2-desktop-follow-off-offscreen.html` — Follow OFF, map panned to a region where the ISS is NOT visible. A cyan directional arrow (~24px) is rendered at the nearest viewport edge pointing toward the ISS (give it a glow halo). A Recenter floating action button (48px circle, cyan bg, white crosshair/target icon) sits in the bottom-right of the map, above the attribution footer.
-- `cuj-2-mobile-follow-off-offscreen.html` — mobile equivalent. Recenter button positioned just above the collapsed bottom sheet, with safe-area padding.
+- `cuj-2-desktop-follow-on.html` — Follow toggle ON (cyan pill, "Follow ISS" label with on state). Map centered on ISS. This is the steady state — also representative of the moment after a zoom gesture, since zoom keeps Follow ON and re-anchors on the ISS. No Recenter button, no edge arrow.
+- `cuj-2-desktop-follow-off-onscreen.html` — Follow OFF (gray pill, off state) after a pan gesture. Map has been dragged slightly but the ISS marker is still in viewport. No edge arrow, no Recenter button. Subtle toast just below the toggle: "Follow off — map won't auto-center."
+- `cuj-2-desktop-follow-off-offscreen.html` — Follow OFF after pan, map dragged to a region where the ISS is NOT visible. A cyan directional arrow (~24px) is rendered at the nearest viewport edge pointing toward the ISS (give it a glow halo). A Recenter floating action button (48px circle, cyan bg, white crosshair/target icon) sits in the bottom-right of the map, above the attribution footer. Tapping Recenter would fly back to the ISS at the current zoom level.
+- `cuj-2-mobile-follow-off-offscreen.html` — mobile equivalent of the panned-off-screen state. Recenter button positioned just above the collapsed bottom sheet, with safe-area padding.
 
 **Key copy strings**:
 - Toggle label: `Follow ISS`
