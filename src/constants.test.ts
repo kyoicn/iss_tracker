@@ -45,8 +45,8 @@ describe('constants', () => {
     expect(RECONNECT_AFTER_FAILURES).toBe(2);
   });
 
-  it('TRAIL_MAX_POINTS is 20 per PRD CUJ-1/CUJ-6', () => {
-    expect(TRAIL_MAX_POINTS).toBe(20);
+  it('TRAIL_MAX_POINTS is 500 per PRD CUJ-1/CUJ-6 (≈42 min of ground track at 5s cadence)', () => {
+    expect(TRAIL_MAX_POINTS).toBe(500);
   });
 
   it('FETCH_TIMEOUT_MS is greater than POLL_BASE_MS to allow late responses', () => {

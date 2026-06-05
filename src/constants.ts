@@ -7,7 +7,7 @@ export const POLL_BASE_MS = 5000;
 export const POLL_BACKOFF_MS = [5000, 10000, 20000, 30000] as const;
 export const FETCH_TIMEOUT_MS = 8000;
 
-export const TRAIL_MAX_POINTS = 20;
+export const TRAIL_MAX_POINTS = 500;
 export const TRAIL_GAP_THRESHOLD_MS = 8000;
 
 export const STALE_THRESHOLD_MS = 30_000;

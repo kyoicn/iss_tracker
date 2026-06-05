@@ -64,7 +64,7 @@ Rate limit: ~1 request/sec. We poll at 0.2 req/sec (every 5s), which leaves ampl
 | CUJ-3 | Read detailed telemetry to understand current ISS state | [~] In progress (P1 hover tooltip deferred) | P0 |
 | CUJ-4 | Use the tracker on a phone (mobile bottom sheet) | [~] In progress (swipe/drag-to-collapse gesture deferred) | P0 |
 | CUJ-5 | Lose connectivity, see graceful recovery | [x] Complete | P0 |
-| CUJ-6 | Long-session ambient display — always polling, deep trail | [~] In progress (always-on polling + 500-point trail + canvas renderer unimplemented) | P0 |
+| CUJ-6 | Long-session ambient display — always polling, deep trail | [~] In progress (1 hr memory soak unmeasured) | P0 |
 
 ---
 
@@ -414,7 +414,7 @@ Mocks to be produced:
 
 ### CUJ-6: Long-session ambient display — always polling, deep trail
 
-**Status**: [~] In progress (always-on polling + 500-point trail + canvas renderer unimplemented)
+**Status**: [~] In progress (implemented 2026-06-05 in iter-4; 1 hr memory soak AC #6 still pending manual DevTools verification)
 **Dependencies**: CUJ-1, CUJ-5
 **Priority**: P0 (launch blocker — confirmed by user as v1 scope)
 
@@ -468,14 +468,14 @@ Mocks for this CUJ:
 - `docs/ux/prd-001-iss-live-tracker-mockups/cuj-6-desktop-long-trail.html` — desktop, tab in the foreground after a long ambient session. Marker is at its current position with normal cyan styling and the standard "just now" / "5s ago" cyan timestamp (no amber, no stale state). A long cyan polyline trail extends behind the marker showing ~42 minutes (~500 points) of ground track spanning multiple continents — visualizing slightly less than half an orbit. This is the headline visual for the "always live" promise.
 
 #### Acceptance Criteria
-- [ ] Polling continues at the 5 s cadence regardless of `document.visibilityState` (no `visibilitychange` handler suspends or modifies the poll timer).
-- [ ] The 1 s "Last updated" tick interval likewise continues regardless of `document.visibilityState`.
-- [ ] The app takes no explicit action (Wake Lock API or otherwise) to prevent OS-level device sleep.
-- [ ] No tab-visible recovery handling is implemented — polling never stops on the app's side. When the OS suspends timers (device sleep), the browser fires the overdue `setTimeout` on wake (standard browser behavior) and the normal cadence resumes from that fetch.
-- [ ] Trail array never grows beyond 500 points; the oldest point is dropped first when capacity is reached.
-- [ ] After 1 hour of continuous use, memory growth is within ~10 MB of baseline (verified via DevTools heap snapshot), despite the 25× larger trail cap.
-- [ ] Trail polyline segments are rendered via Leaflet's canvas renderer (`preferCanvas: true` or an explicit `L.canvas()` renderer) so DOM node count and per-frame paint cost stay constant regardless of trail length.
-- [ ] When a fetch returns after an OS-induced timer suspension and the resulting `receivedAtMs` gap exceeds `TRAIL_GAP_THRESHOLD_MS = 8 s`, the marker fade-jumps (per CUJ-5's gap-skip logic) rather than linearly interpolating across the gap.
+- [x] Polling continues at the 5 s cadence regardless of `document.visibilityState` (no `visibilitychange` handler suspends or modifies the poll timer).
+- [x] The 1 s "Last updated" tick interval likewise continues regardless of `document.visibilityState`.
+- [x] The app takes no explicit action (Wake Lock API or otherwise) to prevent OS-level device sleep.
+- [x] No tab-visible recovery handling is implemented — polling never stops on the app's side. When the OS suspends timers (device sleep), the browser fires the overdue `setTimeout` on wake (standard browser behavior) and the normal cadence resumes from that fetch.
+- [x] Trail array never grows beyond 500 points; the oldest point is dropped first when capacity is reached.
+- [ ] After 1 hour of continuous use, memory growth is within ~10 MB of baseline (verified via DevTools heap snapshot), despite the 25× larger trail cap. — **Not measured.** Carries forward from iter-2: requires a manual ~1 hr DevTools heap snapshot session that the autonomous loop can't run. No leaks identified in code review; the only growth surface is the trail array (bounded at 500) and the single reused canvas element.
+- [x] Trail polyline segments are rendered via Leaflet's canvas renderer (`preferCanvas: true` or an explicit `L.canvas()` renderer) so DOM node count and per-frame paint cost stay constant regardless of trail length.
+- [x] When a fetch returns after an OS-induced timer suspension and the resulting `receivedAtMs` gap exceeds `TRAIL_GAP_THRESHOLD_MS = 8 s`, the marker fade-jumps (per CUJ-5's gap-skip logic) rather than linearly interpolating across the gap. — Existing CUJ-5 gap-skip logic in `MapView.tsx` already handles this; no new code path needed.
 - [x] No timers, listeners, or Leaflet layers leak on component unmount (verified via React StrictMode double-mount behavior).
 
 ---

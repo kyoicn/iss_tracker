@@ -285,7 +285,7 @@ export default function MapView(props: MapViewProps) {
       worldCopyJump={true}
       zoomControl={false}
       attributionControl={true}
-      preferCanvas={false}
+      preferCanvas={true}
       style={{ position: 'absolute', inset: 0, background: COLOR_BG_MAP }}
     >
       <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />

@@ -14,20 +14,19 @@ import { initialState, reducer } from './state';
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const isVisible = usePageVisibility(dispatch);
-  useIssPolling(dispatch, isVisible);
+  usePageVisibility(dispatch);
+  useIssPolling(dispatch);
   const isMobile = useIsMobile();
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const toastTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!isVisible) return;
     const id = window.setInterval(() => {
       dispatch({ type: 'TICK', nowMs: Date.now() });
     }, 1000);
     return () => window.clearInterval(id);
-  }, [isVisible]);
+  }, []);
 
   const handleMapReady = useCallback((map: L.Map) => {
     setMapInstance(map);

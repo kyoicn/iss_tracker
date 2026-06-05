@@ -74,16 +74,16 @@ describe('reducer — SAMPLE_OK', () => {
     expect(s.trail[4]).toEqual({ lat: 4, lon: 4, receivedAtMs: 4000 });
   });
 
-  it('CUJ-1/CUJ-6: caps trail at TRAIL_MAX_POINTS (20), dropping oldest', () => {
+  it('CUJ-1/CUJ-6: caps trail at TRAIL_MAX_POINTS (500), dropping oldest', () => {
     let s = initialState;
-    for (let i = 0; i < 25; i++) {
+    const N = TRAIL_MAX_POINTS + 5;
+    for (let i = 0; i < N; i++) {
       s = reducer(s, { type: 'SAMPLE_OK', sample: makeSample({ lat: i, lon: i, receivedAtMs: i * 1000 }) });
     }
     expect(s.trail).toHaveLength(TRAIL_MAX_POINTS);
-    expect(s.trail).toHaveLength(20);
-    // oldest 5 dropped
+    // oldest 5 dropped: surviving range is [5 .. N-1]
     expect(s.trail[0]).toEqual({ lat: 5, lon: 5, receivedAtMs: 5000 });
-    expect(s.trail[19]).toEqual({ lat: 24, lon: 24, receivedAtMs: 24000 });
+    expect(s.trail[TRAIL_MAX_POINTS - 1]).toEqual({ lat: N - 1, lon: N - 1, receivedAtMs: (N - 1) * 1000 });
   });
 
   it('CUJ-5: resets consecutiveFailures to 0 on success', () => {

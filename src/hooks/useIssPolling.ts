@@ -3,12 +3,10 @@ import { fetchIssPosition } from '../api';
 import { delayFor } from '../constants';
 import type { Action } from '../state';
 
-export function useIssPolling(dispatch: React.Dispatch<Action>, isVisible: boolean): void {
+export function useIssPolling(dispatch: React.Dispatch<Action>): void {
   const failuresRef = useRef<number>(0);
 
   useEffect(() => {
-    if (!isVisible) return;
-
     let cancelled = false;
     let timeoutId: number | null = null;
     let controller: AbortController | null = null;
@@ -43,5 +41,5 @@ export function useIssPolling(dispatch: React.Dispatch<Action>, isVisible: boole
       controller?.abort();
       if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
-  }, [isVisible, dispatch]);
+  }, [dispatch]);
 }
