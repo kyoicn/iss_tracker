@@ -126,18 +126,20 @@ ISS Live Tracker is a single-page web app that shows where the International Spa
 - Map marker: keep it static at last position, no glow change required, but ensure the trail looks "frozen" (no new segment added).
 - Tone: alert without panic. Avoid red — this is not an error, it's a degraded but recoverable state.
 
-### CUJ-6: Leave the tab open for hours as ambient display
-**One-line summary**: Tab pauses polling when hidden, resumes immediately on visibility. After a long absence, marker fades out and fades in at the new position; no fake interpolation across the gap.
+### CUJ-6: Long-session ambient display — always polling, deep trail
+**One-line summary**: Ambient display: polling always on, 500-point trail (~42 min ground track), marker is always current on tab return.
 **States to mock**:
-- `cuj-6-desktop-after-resume.html` — desktop, just after tab regained focus from a long absence. Marker is at the new (post-resume) position with a soft fade-in glow. Telemetry shows "5m ago" in amber briefly (mock this transitional moment). A new trail segment is starting; the old pre-pause trail is visible at a separate location on the map, showing a clear gap between the historical trail and the new marker position.
+- `cuj-6-desktop-after-resume.html` — **STALE.** Replace with `cuj-6-desktop-long-trail.html`; the brief stale-amber state this depicts no longer occurs since polling never pauses. Delete the file once the replacement is drawn.
+- `cuj-6-desktop-long-trail.html` — desktop, tab in the foreground after a long ambient session (the user has just glanced back at the tab, or has been watching it as an ambient display). The marker sits at its current ISS position with normal cyan styling and a normal cyan timestamp like "just now" or "5s ago" — NO amber, NO "5m ago", NO stale state. A long cyan polyline trail extends behind the marker showing ~42 minutes of ground track (~500 points), spanning multiple continents and visualizing slightly less than half an orbit. This is the headline "always live" visual.
 
 **Key copy strings**:
 - (Same field labels and values as other CUJs.)
-- Transitional stale timestamp: e.g., `5m ago` in amber.
+- Timestamp: normal cyan `just now` / `5s ago` — NOT amber, NOT stale.
 
 **Visual notes**:
-- Show two disconnected trail fragments on the map: the old (pre-pause) trail at one location, and a starting point of a new trail at the marker's current position. This visual gap is the key signal that time has passed.
-- This is largely an invisible behavior CUJ; one mock is sufficient.
+- The trail should be visually long and continuous — render ~500 segments with the standard opacity gradient (newest 100% → oldest ~10%). It should arc dramatically across the map.
+- Map zoom should be wide enough to show the full trail (zoom 2 or 3 is appropriate, even if the live app uses a tighter follow zoom).
+- No special chrome differentiates this from CUJ-1's loaded state — the long trail IS the visual signal that the page has been running for a while.
 
 ---
 

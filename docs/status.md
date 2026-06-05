@@ -1,7 +1,7 @@
 # Project Status
 
 > Auto-generated project status summary.
-> Last updated: 2026-06-05 02:08:52 (UTC+8)
+> Last updated: 2026-06-05 22:32:15 (UTC+8)
 
 ## Overview
 
@@ -43,14 +43,14 @@ The authoritative per-CUJ snapshot. Each row records the latest known state acro
 | CUJ-3: Read detailed telemetry | prd-001 | P0 | merged | PASS | — |
 | CUJ-4: Mobile bottom sheet | prd-001 | P0 | merged | PASS | — |
 | CUJ-5: Graceful reconnect / stale indicator | prd-001 | P0 | merged | PASS | — |
-| CUJ-6: Long session / page visibility pausing | prd-001 | P0 | merged | NOT_RUN (AC#4 memory soak) | — |
+| CUJ-6: Long session / continuous polling / canvas rendering | prd-001 | P0 | not started | — | — |
 
 **Column values:**
 - `Impl`: `not started` | `in progress` | `merged`
 - `QA`: `PASS` | `FAIL` | `BLOCKED` | `NOT_RUN` | `WAIVED` | `—` (no QA run yet)
 - `PM`: `Satisfied` | `Caveats` | `Not done` | `—` (no PM review yet)
 
-A CUJ is **fully done** when Impl=`merged`, QA=`PASS`, AND PM=`Satisfied`. CUJ-2 was reset to `not started` on 2026-06-05 because the spec changed (zoom now keeps Follow ON; Recenter preserves user zoom). The existing `src/components/MapView.tsx` implementation no longer matches.
+A CUJ is **fully done** when Impl=`merged`, QA=`PASS`, AND PM=`Satisfied`. CUJ-2 was reset to `not started` on 2026-06-05 because the spec changed (zoom now keeps Follow ON; Recenter preserves user zoom). CUJ-6 was reset to `not started` on 2026-06-05 because the spec changed (visibility-pausing dropped; trail cap 20 → 500; canvas rendering via `preferCanvas:true` added). The existing implementations in `src/hooks/useIssPolling.ts`, `src/state.ts`, and `src/components/MapView.tsx` no longer match.
 
 ## Feature Status
 
@@ -96,13 +96,6 @@ All items below passed both QA run 1 and run 2, and are confirmed working in a r
 - Post-outage marker jump (fade out/in, no fake linear trajectory); trail not extended across gap.
 - No raw error messages or stack traces shown to user.
 
-**CUJ-6 — Page Visibility pausing / trail cap / long session**
-- Polling pauses (`abortController.abort()` + `clearTimeout`) when `visibilityState === 'hidden'`.
-- Immediate poll + 5 s cadence resume when tab becomes visible.
-- Trail array hard-capped at 20 points via reducer (reducer tested with 25 `SAMPLE_OK` actions → `trail.length === 20`).
-- Marker fade-out/fade-in (not linear interp) after long hidden gap.
-- Effect cleanup paths verified: `useEffect` cleanups in `App.tsx`, `MapView.tsx`, `useIssPolling.ts`, `usePageVisibility.ts`.
-
 **Infrastructure**
 - 77 unit tests passing (`npm test`): `src/constants.test.ts` (9), `src/state.test.ts` (47), `src/api.test.ts` (20).
 - `npm run typecheck` (tsc --noEmit) passes clean.
@@ -110,6 +103,8 @@ All items below passed both QA run 1 and run 2, and are confirmed working in a r
 - Favicon: `public/favicon.svg` (dark navy + cyan target rings) + `<link rel="icon">` in `index.html`.
 
 ### In Progress / Not Started
+
+- **CUJ-6 — Long session / continuous polling / canvas rendering (spec changed 2026-06-05)**: The PRD was refined today. The prior spec ("pause polling when `visibilityState === 'hidden'`; resume on visible; trail cap 20") has been replaced: polling now runs continuously whenever the OS allows; trail cap is bumped from 20 to 500; map rendering switches to Leaflet canvas (`preferCanvas:true`) for memory-bounded-ness. ACs #1–5 and #7 are now `[ ]`; AC #6 (no leaks on unmount) remains `[x]`. The existing `src/hooks/useIssPolling.ts` (visibility-aware abort), `src/state.ts` (`TRAIL_MAX_POINTS = 20`), and `src/components/MapView.tsx` (SVG renderer) no longer match the spec. CUJ-6 is reset to `not started`.
 
 - **CUJ-2 — Zoom-decoupled Follow + zoom-preserving Recenter (spec changed 2026-06-05)**: The PRD was refined today. The prior behavior ("any pan or zoom disables Follow; Recenter flies to ISS at `ISS_LOCK_ZOOM=3`") has been replaced with a new spec: only pan disables Follow; zoom keeps Follow ON and immediately re-anchors on the ISS at the new zoom level (~300ms `flyTo`); Recenter preserves the user's current zoom rather than resetting to `ISS_LOCK_ZOOM`. Acceptance criteria #3, #8, and new #10 in `docs/prd/prd-001-iss-live-tracker.md` are now `[ ]`. The existing `MapView.tsx` implementation no longer matches the spec. Prior QA results and PM verdicts are invalidated — this CUJ is reset to `not started`.
 
@@ -157,6 +152,7 @@ wheretheiss.at API
 
 usePageVisibility (src/hooks/usePageVisibility.ts)
   └─> isVisible flag → pauses/resumes useIssPolling and TICK interval
+  NOTE: CUJ-6 spec change (2026-06-05) removes visibility-pausing; this hook's role in polling will be eliminated once CUJ-6 is re-implemented.
 
 App.tsx setInterval (1 s)
   └─> dispatch TICK → state.nowMs → "Last updated" relative time in panel/sheet
@@ -212,11 +208,16 @@ Active areas: `src/components/MapView.tsx` (most recent changes — race fix and
 
 ### Open (not yet fixed)
 
+- **[HIGH] CUJ-6 — Spec changed 2026-06-05, implementation does not match**: Three files implement the old spec and must be updated before any QA or PM work can proceed:
+  - `src/hooks/useIssPolling.ts` — removes visibility-aware pause/resume (`usePageVisibility` integration and `VISIBILITY_CHANGE` handling); polling must run continuously.
+  - `src/state.ts` — `TRAIL_MAX_POINTS` must change from `20` to `500`; the `VISIBILITY_CHANGE` action type and its reducer branch should be removed.
+  - `src/components/MapView.tsx` — `<MapContainer>` must add `preferCanvas={true}` to switch from SVG to canvas renderer.
+  - PRD ACs #1–5 and #7 are `[ ]`.
+
 - **[HIGH] CUJ-2 — Spec changed 2026-06-05, implementation does not match**: `src/components/MapView.tsx` still implements the old behavior (any zoom disables Follow; Recenter resets to `ISS_LOCK_ZOOM=3`). The new spec requires: (1) zoom keeps Follow ON + immediately re-anchors on ISS at new zoom via ~300ms `flyTo`; (2) pan disables Follow (unchanged); (3) Recenter flies to ISS at the user's **current zoom** (not `ISS_LOCK_ZOOM`). PRD ACs #3, #8, and #10 are `[ ]`. Needs re-implementation before CUJ-2 can be QA-walked or PM-reviewed.
 
 ### Coverage gaps (not bugs, flagged for pre-launch)
 
-- **CUJ-6 criterion 4 — memory soak**: 1 hr session + DevTools heap snapshot not yet run. Cleanup paths are verified by code review but the <10 MB growth target has not been measured.
 - **Mobile touch-gesture coverage**: Playwright touch-emulation fixture not wired. Current CUJ-4 coverage used mouse-drag simulation; real `touchstart`/`touchmove` paths (including pinch-zoom and drag-to-collapse sheet) are untested by automated tooling.
 
 ### Fixed in commit `19e833f` (closed)

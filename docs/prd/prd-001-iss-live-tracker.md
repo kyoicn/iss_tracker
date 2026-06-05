@@ -64,7 +64,7 @@ Rate limit: ~1 request/sec. We poll at 0.2 req/sec (every 5s), which leaves ampl
 | CUJ-3 | Read detailed telemetry to understand current ISS state | [~] In progress (P1 hover tooltip deferred) | P0 |
 | CUJ-4 | Use the tracker on a phone (mobile bottom sheet) | [~] In progress (swipe/drag-to-collapse gesture deferred) | P0 |
 | CUJ-5 | Lose connectivity, see graceful recovery | [x] Complete | P0 |
-| CUJ-6 | Leave the tab open for hours as ambient display | [~] In progress (1 hr memory soak unmeasured) | P0 |
+| CUJ-6 | Long-session ambient display — always polling, deep trail | [~] In progress (always-on polling + 500-point trail + canvas renderer unimplemented) | P0 |
 
 ---
 
@@ -96,11 +96,11 @@ This is the dominant journey. A curious user opens the URL — possibly from a t
 
 3. **User action**: Waits 5 seconds.
    - **System response**: The next poll completes. The marker smoothly animates from its previous lat/long to the new lat/long over ~5000ms (matching the poll interval, so motion looks continuous). The trail polyline now has 2 points and draws a faint line behind the marker. Telemetry values update in place (no flash, just the number changing). "Last updated" resets to "just now."
-   - **User sees**: A live-feeling map where the ISS is gliding across the world, leaving a fading trail behind it. The trail is a polyline in cyan that fades from full opacity at the marker's tail to transparent at the oldest point. After enough polls accumulate (up to 20 points), the trail extends behind the ISS showing its recent ground track.
-   - **Details**: Marker animation interpolates linearly between known positions over the 5s interval. If a poll is delayed or late, the marker continues animating along its last computed trajectory but does not overshoot — it holds at the last known position and waits. Trail polyline has max 20 points; oldest point is dropped when a new one is added. Opacity gradient: newest segment 100%, oldest segment ~10%.
+   - **User sees**: A live-feeling map where the ISS is gliding across the world, leaving a fading trail behind it. The trail is a polyline in cyan that fades from full opacity at the marker's tail to transparent at the oldest point. After enough polls accumulate (up to 500 points), the trail extends behind the ISS showing roughly the last ~42 minutes of ground track.
+   - **Details**: Marker animation interpolates linearly between known positions over the 5s interval. If a poll is delayed or late, the marker continues animating along its last computed trajectory but does not overshoot — it holds at the last known position and waits. Trail polyline has max 500 points; oldest point is dropped when a new one is added. Opacity gradient: newest segment 100%, oldest segment ~10%. Trail segments are drawn via Leaflet's canvas renderer so the cost stays constant regardless of length (see CUJ-6 AC #4).
 
 4. **User action**: Watches passively, eventually closes the tab or moves on.
-   - **System response**: No additional behavior. The page continues polling at 5s intervals as long as the tab is open and visible. (See CUJ-6 for tab-backgrounded behavior.)
+   - **System response**: No additional behavior. The page continues polling at 5s intervals as long as the tab is open and the OS allows timers to run — backgrounding does NOT pause polling (see CUJ-6).
    - **User sees**: Same as step 3, continuously updating.
    - **Details**: No analytics, no tracking pixels, no popups, no modals, no nags. The page does one thing.
 
@@ -386,7 +386,7 @@ The user might lose Wi-Fi briefly, suspend their laptop, walk into an elevator, 
 - **API returns 429 (rate limited)**: Treated as a transient failure — backoff applies. Should not happen at 5s polling, but defended against.
 - **API returns 500 / 502 / 503**: Same as network failure — backoff and retry.
 - **API returns 200 with malformed JSON**: Same as failure.
-- **Browser tab goes to background (Page Visibility API)**: Polling pauses. On tab focus, immediately issue one poll and resume 5s cadence. (See CUJ-6 — covered in detail there.)
+- **Browser tab goes to background (Page Visibility API)**: Polling continues at 5 s; the app does NOT pause on `visibilitychange`. (See CUJ-6 — covered in detail there.)
 - **User has been disconnected for hours, comes back**: Same recovery path. Trail history is preserved (last 20 positions before the outage are still shown), the new segment starts at the post-reconnect position.
 - **Page never gets a successful initial fetch**: After 2 failures, "Reconnecting…" replaces "Locating ISS…" in the placeholder panel. Map remains at world view. Marker never appears until first success. CUJ-1's path then resumes.
 
@@ -412,56 +412,70 @@ Mocks to be produced:
 
 ---
 
-### CUJ-6: Leave the tab open for hours as ambient display
+### CUJ-6: Long-session ambient display — always polling, deep trail
 
-**Status**: [~] In progress — pause-on-hidden, immediate-poll-on-resume, trail cap at 20, fade-out/in on long-gap resume, and effect cleanup paths are all verified (QA + 47 reducer tests + code review of cleanup in `App.tsx`, `MapView.tsx`, `useIssPolling.ts`, `usePageVisibility.ts`). **AC #4 (memory growth <10 MB after 1 hr) is not measured** — would require a sustained DevTools heap-snapshot session. No leaks suspected; flagged as a launch-readiness measurement, not a behavior gap.
+**Status**: [~] In progress (always-on polling + 500-point trail + canvas renderer unimplemented)
 **Dependencies**: CUJ-1, CUJ-5
 **Priority**: P0 (launch blocker — confirmed by user as v1 scope)
 
 #### Context
-A meaningful share of enthusiast users will leave the page open on a second monitor, a kitchen tablet, or a background tab — checking it occasionally over hours. The app must remain healthy in this scenario: no memory leaks, no runaway polling when the tab is hidden, and a sensible "welcome back" experience when the tab regains focus.
+A meaningful share of enthusiast users will leave the page open on a second monitor, a kitchen tablet, or a background tab — checking it occasionally over hours. The product promise for this audience is "real-time tracker, always live": when the user glances back at the tab, the ISS marker and telemetry should already be current. Any "X minutes ago" stale-amber intermediate, fade-jump, or "welcome back" reconciliation breaks that promise. Polling must therefore continue whenever the OS permits — `document.visibilityState` is irrelevant to the polling cadence. A complementary value is a **deep visible history**: when the user returns, the cyan trail should show a meaningful slice of the recent orbit (~half an orbit, ~42 minutes) so they can immediately read where the ISS has been.
 
 #### Preconditions
-- CUJ-1 is complete: page is loaded and tracking.
-- User minimizes the window, switches to another tab, or locks their screen.
+- CUJ-1 is complete: page is loaded and tracking; the first fix has landed, the marker is glowing, and the trail has started.
+- The user has the tab open in a browser the OS has not suspended.
 
 #### Journey Steps
 
-1. **User action**: Switches to another browser tab or minimizes the window. The current tab becomes hidden (Page Visibility API: `document.visibilityState === "hidden"`).
-   - **System response**: Polling pauses. The currently-scheduled `setTimeout`/`setInterval` for the next poll is cleared. No requests are issued while the tab is hidden. Existing telemetry remains in memory.
+1. **User action**: Opens the tab and lets CUJ-1 complete (first fix, lock-on, marker glow, trail begins).
+   - **System response**: Polling runs at the 5 s cadence and the 1 s "Last updated" tick runs alongside it. The trail array begins accumulating positions.
+   - **User sees**: Normal CUJ-1 steady state: live marker gliding, telemetry ticking, trail growing behind the marker.
+   - **Details**: Trail rendering uses Leaflet's canvas renderer (`preferCanvas: true` on map init, or a `L.canvas()` renderer explicitly passed to the polyline) so segments are drawn to a single canvas rather than as per-segment SVG nodes. This is what makes the 500-point cap feasible without DOM bloat.
+
+2. **User action**: Switches to another browser tab, minimizes the window, or otherwise hides this tab (`document.visibilityState === "hidden"`).
+   - **System response**: Polling continues at 5 s. The 1 s tick continues. The reducer keeps appending new positions to the trail; when the trail reaches 500 points it drops the oldest on each append. No `visibilitychange` handler suspends, throttles, or otherwise modifies any timer. The app takes no action (Wake Lock API or otherwise) to keep the device from sleeping.
    - **User sees**: Nothing (tab is hidden).
-   - **Details**: We pause polling for two reasons: (1) be a polite citizen of the network and API, (2) avoid unbounded memory growth in the trail array if we kept appending for hours. Browsers also throttle background timers, which would corrupt our 5s cadence assumption — pausing is cleaner.
+   - **Details**: `requestAnimationFrame` is paused by the browser while the tab is hidden, so the in-flight marker tween freezes. New samples still arrive; each one cancels the prior tween's rAF and schedules a new one (existing useEffect cleanup pattern in `MapView.tsx`). When the tab becomes visible again, only the most-recent tween runs, from its captured `prev`/`current` pair — so the marker arrives at the correct current position (or fade-jumps if the gap exceeds the CUJ-5 threshold).
 
-2. **User action**: Returns to the tab (clicks it / unminimizes / wakes the device). Tab becomes visible.
-   - **System response**: Immediately issues one poll. On success, telemetry updates, marker jumps to new position via fade-out/fade-in (same as long-outage recovery in CUJ-5, because hours have likely passed). Resumes 5s polling cadence.
-   - **User sees**: Telemetry appears stale at first ("5m ago" in amber), then within 500ms the new data lands and the panel returns to "just now" green. Marker fades from old position to new position.
-   - **Details**: The trail polyline is NOT extended across the hidden gap (same logic as CUJ-5). The user can see at a glance — by comparing the trail's last point to the marker's current position — that time has passed. No "you've been away for X" message; the timestamp tells the story.
+3. **User action**: After ~10 minutes the user returns to the tab.
+   - **System response**: No tab-visible recovery is performed because nothing was paused. The most-recent poll's data is already in state; the marker's last queued tween resumes/starts and lands at the current position; telemetry reflects the latest fix.
+   - **User sees**: The marker is already at the ISS's current position. Telemetry reads "just now" (or "5s ago" if the user catches the page just before the next poll), in the normal cyan/green styling — **no amber "5m ago", no stale state, no fade-jump**. The cyan trail extends behind the marker showing the last ~10 minutes (~120 points) of ground track.
+   - **Details**: This is the central payoff of the always-on design. The longer the absence, the more dramatic the trail behind the marker, up to the 500-point cap.
 
-3. **User action**: Leaves the page running continuously for many hours.
-   - **System response**: Trail array stays capped at 20 points. No DOM nodes leak. Memory footprint stays roughly constant (within ~10MB variance). Polling continues at 5s.
-   - **User sees**: A continuously updating live tracker, indistinguishable from a fresh load.
-   - **Details**: Implementation note for engineers: ensure React effect cleanup correctly clears timers on unmount, and that Leaflet layer cleanups (`marker.remove()`, `polyline.remove()`) run when components unmount. Specifically, replace the trail polyline rather than incrementally redrawing, OR use a mutable Leaflet polyline whose `setLatLngs` is called with the bounded array.
+4. **User action**: Leaves the page running continuously for many hours (overnight, all-day ambient display).
+   - **System response**: The trail array stays bounded at 500 points; the oldest position is dropped on each new append. Polling continues at 5 s. The canvas renderer redraws the bounded polyline each frame at constant cost — no DOM node accumulation. Memory footprint stays roughly constant.
+   - **User sees**: A continuously updating live tracker with a long cyan trail showing the last ~42 minutes (~half an orbit) of ground track behind the marker, indistinguishable in behavior from a freshly-loaded page.
+   - **Details**: 500 points × 5 s/point ≈ 2500 s ≈ 41.7 minutes. The ISS's orbital period is ~92 minutes, so ~42 minutes of trail covers slightly less than half an orbit — visually a long arc spanning multiple continents. Implementation note for engineers: ensure React effect cleanup correctly clears timers on unmount, and that Leaflet layer cleanups (`marker.remove()`, `polyline.remove()`) run when components unmount. Replace the trail polyline via `setLatLngs(boundedArray)` rather than recreating it on each tick.
+
+5. **User action**: (Implicit) The OS puts the device to sleep (laptop lid closed, phone screen off long enough for app suspension, etc.). Some time later the device wakes.
+   - **System response**: While the device is sleeping, browser timers are stopped by the OS — the app does not fight this. On wake, the browser fires the overdue `setTimeout` immediately (standard browser behavior), which triggers one fetch. If the `receivedAtMs` gap between the previous successful sample and the new one exceeds `TRAIL_GAP_THRESHOLD_MS = 8 s`, the marker fade-jumps to the new position per the existing CUJ-5 gap-skip logic, and the trail does not bridge the sleep gap. Normal 5 s cadence resumes.
+   - **User sees**: On the first glance after wake, a brief fade-out at the pre-sleep position and fade-in at the post-sleep position; the trail before the sleep gap remains visible up to the cap, but no segment connects across the gap. Within 5 s normal motion resumes.
+   - **Details**: This is the one scenario where the user can observe a fade-jump in the always-on design, and it is the right behavior — the gap is real, not a polling artifact.
 
 #### Edge Cases & Error States
-- **Device sleeps and wakes**: Same path as tab hidden/visible. Page Visibility API fires correctly.
-- **Tab visible but window completely occluded**: `visibilityState` is still "visible" — we keep polling. Acceptable.
-- **User opens 10 copies of the tab**: Each polls independently at 5s. Total load is 10 × 0.2 req/sec = 2 req/sec across all tabs, still well within the API's ~1 req/sec/IP limit only if the user is on a single IP. We do not coordinate across tabs in v1. Acceptable for the audience size.
-- **Browser throttles even when "visible" (e.g., low battery mode)**: Polling will be irregular. We don't compensate beyond the standard backoff — if polls genuinely fail, CUJ-5's reconnect path applies.
+- **Device sleeps and wakes**: Timers stop OS-side. On wake, the browser fires the overdue `setTimeout` immediately; one fetch happens, and a fade-jump is applied if the receivedAtMs gap exceeds 8 s. The app does NOT use the Wake Lock API or any other mechanism to keep the device awake.
+- **Tab visible but window completely occluded**: Polling continues (always-on). Visibility ≠ focus ≠ occlusion; none of them affect polling.
+- **User opens many tabs of this page**: Each tab polls independently at 0.2 req/sec. 5 tabs ≈ 1 req/sec which is at the published API limit; 10+ tabs from the same IP may trigger transient `429` responses, which are handled by the existing CUJ-5 backoff path. We do not coordinate across tabs.
+- **Browser throttles `setTimeout` in background tabs**: Chrome typically clamps the minimum to ~1 s when a tab is hidden, and as aggressively as ~1 minute under battery saver / energy-efficiency modes. Our 5 s cadence is above the 1 s floor so it is usually unaffected, but under aggressive throttling the cadence may slip. The existing `gap > 8 s → fade-jump` reducer rule absorbs this gracefully without any special handling.
+- **Marker tween while tab hidden**: `requestAnimationFrame` is paused by the browser. New samples continue arriving; each cancels the prior tween's rAF and schedules a new one (existing cleanup pattern). When the tab becomes visible, only the LAST queued tween runs, from its captured `prev`/`current` pair — so the marker smoothly arrives at the most-recent position (or fade-jumps if the gap > 8 s).
+- **Trail at 500-point cap during a fade-jump**: Cap behavior is unchanged — the new post-gap point is appended, the oldest is dropped, and the gap is simply a non-connected break in the polyline (per CUJ-5).
 
 #### Mocks / Reference Designs
 [needs-mocks]
 
-Mocks to be produced (low priority, mostly identical to CUJ-1 visuals):
-- `docs/ux/prd-001-iss-live-tracker-mockups/cuj-6-desktop-after-resume.html` — desktop, just after tab regained focus, showing marker jump and "5m ago" amber timestamp briefly before resolving.
-
-(Most of CUJ-6 is invisible behavior; primary verification is via behavior tests, not visual mocks.)
+Mocks for this CUJ:
+- `docs/ux/prd-001-iss-live-tracker-mockups/cuj-6-desktop-after-resume.html` — **STALE.** Depicts a brief "5m ago" amber stale-state and fade-jump during tab resume, neither of which occurs in the revised always-on design. Replace with `cuj-6-desktop-long-trail.html` (below) and delete this file once the replacement is drawn.
+- `docs/ux/prd-001-iss-live-tracker-mockups/cuj-6-desktop-long-trail.html` — desktop, tab in the foreground after a long ambient session. Marker is at its current position with normal cyan styling and the standard "just now" / "5s ago" cyan timestamp (no amber, no stale state). A long cyan polyline trail extends behind the marker showing ~42 minutes (~500 points) of ground track spanning multiple continents — visualizing slightly less than half an orbit. This is the headline visual for the "always live" promise.
 
 #### Acceptance Criteria
-- [x] Polling pauses when `document.visibilityState === "hidden"` (no network requests issued).
-- [x] Polling resumes immediately on tab visible, with one immediate poll followed by 5s cadence.
-- [x] Trail array never grows beyond 20 points.
-- [ ] After 1 hour of continuous use, memory growth is within ~10MB of baseline (verified via DevTools heap snapshot). — **Not measured.** Cleanup paths verified by code review but the <10 MB target has not been directly observed. Flagged for pre-launch heap-snapshot measurement.
-- [x] After tab resume, marker fades out/in rather than linearly interpolating across a long gap.
+- [ ] Polling continues at the 5 s cadence regardless of `document.visibilityState` (no `visibilitychange` handler suspends or modifies the poll timer).
+- [ ] The 1 s "Last updated" tick interval likewise continues regardless of `document.visibilityState`.
+- [ ] The app takes no explicit action (Wake Lock API or otherwise) to prevent OS-level device sleep.
+- [ ] No tab-visible recovery handling is implemented — polling never stops on the app's side. When the OS suspends timers (device sleep), the browser fires the overdue `setTimeout` on wake (standard browser behavior) and the normal cadence resumes from that fetch.
+- [ ] Trail array never grows beyond 500 points; the oldest point is dropped first when capacity is reached.
+- [ ] After 1 hour of continuous use, memory growth is within ~10 MB of baseline (verified via DevTools heap snapshot), despite the 25× larger trail cap.
+- [ ] Trail polyline segments are rendered via Leaflet's canvas renderer (`preferCanvas: true` or an explicit `L.canvas()` renderer) so DOM node count and per-frame paint cost stay constant regardless of trail length.
+- [ ] When a fetch returns after an OS-induced timer suspension and the resulting `receivedAtMs` gap exceeds `TRAIL_GAP_THRESHOLD_MS = 8 s`, the marker fade-jumps (per CUJ-5's gap-skip logic) rather than linearly interpolating across the gap.
 - [x] No timers, listeners, or Leaflet layers leak on component unmount (verified via React StrictMode double-mount behavior).
 
 ---
@@ -483,7 +497,7 @@ CUJ-1 is the root. All P0 CUJs must be complete before launch. CUJ-6 (P1) is tec
 
 - **Dark map style**: **CartoDB Dark Matter** (`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png`). Free, OSM-based, designed for dark themes. Attribution: standard OSM + "© CARTO".
 - **Follow auto-disable on pan/zoom**: **confirmed**. Any user-initiated pan or zoom flips Follow to OFF and surfaces the brief toast (per CUJ-2 step 1).
-- **CUJ-6 in v1 scope**: **confirmed**. Page Visibility pausing, trail cap, and resume-jump behavior are launch-blocking.
+- **CUJ-6 in v1 scope**: **confirmed**. Always-on polling (no `visibilitychange` pause), 500-point trail with canvas rendering, and OS-sleep gap-jump behavior are launch-blocking. (Earlier iteration paused polling on `visibilitychange`; reversed 2026-06-05 because the "ambient display, always live" promise required the marker to be current the instant the user looks back.)
 
 ## Open Questions
 
