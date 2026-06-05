@@ -70,7 +70,7 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
       weight: 2,
       opacity: 1,
       interactive: false,
-      lineCap: 'round',
+      lineCap: 'butt',
     });
     liveSegment.addTo(map);
     liveSegmentRef.current = liveSegment;
@@ -251,7 +251,7 @@ function MapInner({ state, onMapInteract, onMarkerVisibilityChange, onMapReady }
             weight: 2,
             opacity,
             interactive: false,
-            lineCap: 'round',
+            lineCap: 'butt',
           },
         );
         seg.addTo(layer);
