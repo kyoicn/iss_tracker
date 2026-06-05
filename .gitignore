@@ -12,3 +12,10 @@ test-results/
 iter*.png
 *.png
 docs/issues-attachments/
+docs/issues.md
+.qa-dev-server.pid
+.qa-dev-server.log
+
+docs/gorilla/
+docs/gorilla-artifacts/
+docs/gorilla-report.md
