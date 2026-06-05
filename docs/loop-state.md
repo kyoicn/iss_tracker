@@ -1,47 +1,35 @@
-# Loop State
+# Dev Loop State
 
-Last updated: 2026-06-02
-Iteration: 2
+Last updated: 2026-06-05 19:39:11 (UTC+8)
+Iteration: 3 (scoped to prd-001)
 Status: **done**
 
 ## Last Cycle Summary
-- Tasks executed: 2 vertical slices across iter-1 (foundation + text telemetry) and iter-2 (full UI)
-- Tasks passed QA: all (6 P0 CUJs walked + 77 unit tests)
+- Scope: refined CUJ-2 in prd-001 (zoom decoupled from Follow, zoom-preserving Recenter)
+- Tasks executed: 1 surgical implementation in `src/components/MapView.tsx`
+- Tasks passed QA: all
 - Tasks rolled back by QA: 0
 - Tests passing: 77 / 77 (1 skipped live-network smoke gated by env)
 - Tests failing: 0
-- QA inner loops used: 1 of 2 (1 retry after bug fixes)
-- CUJs completed this cycle: CUJ-1, CUJ-2, CUJ-3, CUJ-4, CUJ-5, CUJ-6 (all P0)
-- CUJs remaining: 0 unstarted; 3 marked `[~] In progress` for explicit deferrals (see below)
+- QA inner loops used: 0
+- CUJs completed this cycle: CUJ-2 (refined)
+- CUJs remaining: 0 in scope for this iteration
 
 ## QA Gate
-- Verdict (initial run): FAIL — 1 MEDIUM + 2 LOW bugs filed
-- Verdict (retry 1): PASS on static gates + source review for the MEDIUM fix
-  - Bug 1 (Recenter race, `MapView.tsx`) — fixed via counter-based `programmaticPendingRef`. Confirmed by source review of the 3 increment sites + 1 decrement site. Dynamic re-walk could not run because Playwright MCP disconnected mid-session; the unit test suite and static gates passed, and the fix is local and provably correct.
-  - Bug 2 (misleading "?" tooltip dots, `TelemetryPanel.tsx`) — fixed by removing the dots (P1 tooltips remain deferred).
-  - Bug 3 (favicon 404) — fixed by adding `public/favicon.svg` and `<link rel=icon>` in `index.html`.
-- Fabrications found: none. QA confirmed all telemetry values trace to real wheretheiss.at responses.
+- Verdict: PASS
+  - Acceptance criterion #3a (pan disables Follow): verified — drag-pan flipped Follow to OFF
+  - Acceptance criterion #3b (zoom does NOT disable Follow): verified — 4 wheel-zoom-ins kept Follow ON
+  - Acceptance criterion #8 (Recenter preserves current zoom): verified — re-enabling Follow at zoom 7 flew to ISS at zoom 7, not snap-back to ISS_LOCK_ZOOM=3
+  - Acceptance criterion #10 (zoom-while-following re-anchors via 300ms flyTo): verified — marker landed within 4,6 px of map center after the zoom-anchored shift
+- Static gates: typecheck PASS, 77/77 unit tests PASS, build PASS (97.56 KB gzipped)
+- Fabrications found: none
 - HIGH bugs found: 0
 - Tasks rolled back: none
 
-## CUJ Completion (per PM Phase 6 review)
-| ID | Status | Reason |
-|---|---|---|
-| CUJ-1 | `[x]` Complete | All 11 AC verified |
-| CUJ-2 | `[x]` Complete | All 9 AC verified; MEDIUM race fix confirmed by inspection |
-| CUJ-3 | `[~]` In progress | P1 hover tooltip explicitly deferred in PRD AC #10 |
-| CUJ-4 | `[~]` In progress | Drag-to-collapse swipe gesture explicitly deferred per `design-iss-tracker.md §16` |
-| CUJ-5 | `[x]` Complete | All 10 AC verified |
-| CUJ-6 | `[~]` In progress | 1 hr memory soak (AC #4) unmeasured — requires manual DevTools session |
-
-## Deferrals (non-launch-blocking)
-1. **CUJ-3 P1 hover tooltips** — explicitly P1 in PRD; pick up when post-launch work begins
-2. **CUJ-4 drag-to-collapse gesture** — design doc explicitly deferred for v1; tap-toggle + tap-overlay-to-collapse ship in v1
-3. **CUJ-6 1 hr memory soak** — pre-launch DevTools heap snapshot session, not autonomous-loop verifiable
-4. **CUJ-2 race fix dynamic Playwright re-walk** — install Playwright MCP at user scope to re-run
+## Implementation Notes
+- `MapView.tsx`: added `isZoomingRef` so `movestart` triggered by cursor-anchored zoom's incidental pan no longer fires `onMapInteract`. Added `handleZoomEnd` that schedules a `setTimeout(0)` re-anchor flyTo when Follow is ON and a sample exists — deferring to the next tick avoids event interleaving with the wheel-zoom's own `moveend`.
+- Both the marker-tween jump path (non-first-fix only) and the standalone follow-recenter effect now use `map.getZoom()` instead of `ISS_LOCK_ZOOM` for their flyTo calls.
+- First-fix still uses `ISS_LOCK_ZOOM` as the introductory lock-on (CUJ-1 step 2 behavior preserved).
 
 ## Next Focus
-The MVP is functionally complete. The user can decide whether to:
-- Ship v1 now (recommended — all P0 functionality verified)
-- Schedule a polish iteration for the P1 tooltips + drag gesture before launch
-- Add the 1 hr soak step into pre-launch QA checklist (manual)
+v1 MVP is functionally complete with this refinement. Remaining deferrals (CUJ-3 P1 tooltips, CUJ-4 drag-to-collapse, CUJ-6 1 hr memory soak) are unchanged from iter-2 and not blockers.

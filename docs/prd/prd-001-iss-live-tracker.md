@@ -60,7 +60,7 @@ Rate limit: ~1 request/sec. We poll at 0.2 req/sec (every 5s), which leaves ampl
 | ID | Title | Status | Priority |
 |---|---|---|---|
 | CUJ-1 | First load and live tracking glance | [x] Complete | P0 |
-| CUJ-2 | Zoom freely while following; pan to explore, recenter to return | [~] In progress (zoom decoupling + zoom-preserving Recenter unimplemented) | P0 |
+| CUJ-2 | Zoom freely while following; pan to explore, recenter to return | [x] Complete | P0 |
 | CUJ-3 | Read detailed telemetry to understand current ISS state | [~] In progress (P1 hover tooltip deferred) | P0 |
 | CUJ-4 | Use the tracker on a phone (mobile bottom sheet) | [~] In progress (swipe/drag-to-collapse gesture deferred) | P0 |
 | CUJ-5 | Lose connectivity, see graceful recovery | [x] Complete | P0 |
@@ -138,7 +138,7 @@ Mocks to be produced:
 
 ### CUJ-2: Zoom freely while following; pan to explore, recenter to return
 
-**Status**: [~] In progress (refined 2026-06-05; zoom decoupling + zoom-preserving Recenter unimplemented)
+**Status**: [x] Complete (refined 2026-06-05 in commit `83e0b04`; verified in browser with wheel zoom + drag pan + Follow-toggle re-enable)
 **Dependencies**: CUJ-1
 **Priority**: P0 (launch blocker)
 
@@ -201,15 +201,15 @@ Mocks to be produced:
 #### Acceptance Criteria
 - [x] Follow toggle is visible in the top-right of the map at all times.
 - [x] Toggle defaults to ON on page load.
-- [ ] User-initiated **pan** (mouse drag, single-finger touch drag) automatically switches Follow to OFF.
-- [ ] User-initiated **zoom** (scroll wheel, pinch, double-click, keyboard `+` / `-`) does NOT change Follow's state.
+- [x] User-initiated **pan** (mouse drag, single-finger touch drag) automatically switches Follow to OFF.
+- [x] User-initiated **zoom** (scroll wheel, pinch, double-click, keyboard `+` / `-`) does NOT change Follow's state.
 - [x] When Follow is OFF, the map does not auto-recenter on poll updates.
 - [x] Polling and marker updates continue regardless of Follow state.
 - [x] When Follow is OFF and the ISS marker is outside the viewport, a directional arrow appears at the nearest viewport edge pointing toward the marker.
 - [x] When Follow is OFF and the ISS marker is outside the viewport, a Recenter floating button appears in the bottom-right of the map.
-- [ ] Tapping the Recenter button OR re-enabling Follow flies the map back to the ISS at the user's **current zoom level** (not reset to `ISS_LOCK_ZOOM`) over ~1500ms and turns Follow ON. (Race vs. concurrent poll fixed in `19e833f` via counter-based programmatic-move guard.)
+- [x] Tapping the Recenter button OR re-enabling Follow flies the map back to the ISS at the user's **current zoom level** (not reset to `ISS_LOCK_ZOOM`) over ~1500ms and turns Follow ON. (Race vs. concurrent poll fixed in `19e833f` via counter-based programmatic-move guard.)
 - [x] A brief "Follow off" toast appears the first time Follow is auto-disabled in a session (max once per session is acceptable).
-- [ ] When Follow is ON and the user zooms via any gesture, the map immediately re-anchors on the ISS at the new zoom level via a ~300ms `flyTo`.
+- [x] When Follow is ON and the user zooms via any gesture, the map immediately re-anchors on the ISS at the new zoom level via a ~300ms `flyTo`.
 
 ---
 
